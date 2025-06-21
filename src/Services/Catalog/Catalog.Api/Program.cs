@@ -1,6 +1,7 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Observability;
 using BuildingBlocks.Persistence;
+using Catalog.Api.Caching;
 using Catalog.Api.Data;
 using Catalog.Api.Products;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<CatalogOptions>(builder.Configuration.GetSection(CatalogOptions.SectionName));
 builder.Services.AddDbContext<CatalogDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("CatalogDb")));
+
+builder.AddProductCaching();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks()

@@ -1,3 +1,4 @@
+using Catalog.Api.Caching;
 using Catalog.Api.Data;
 using Catalog.Api.Domain;
 using Microsoft.EntityFrameworkCore;
@@ -41,10 +42,10 @@ public static class ProductEndpoints
         return Results.Ok(new PagedResult<ProductDto>(items, page, pageSize, total));
     }
 
-    private static async Task<IResult> GetProduct(Guid id, CatalogDbContext db, CancellationToken cancellationToken)
+    private static async Task<IResult> GetProduct(Guid id, ProductCache cache, CancellationToken cancellationToken)
     {
-        var product = await db.Products.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
-        return product is null ? Results.NotFound() : Results.Ok(ProductDto.From(product));
+        var product = await cache.GetAsync(id, cancellationToken);
+        return product is null ? Results.NotFound() : Results.Ok(product);
     }
 
     /// <summary>
@@ -52,7 +53,7 @@ public static class ProductEndpoints
     /// result. Used by the ordering service to price an order in one call.
     /// </summary>
     private static async Task<IResult> LookupProducts(
-        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "ids")] Guid[] ids, CatalogDbContext db, CancellationToken cancellationToken)
+        [Microsoft.AspNetCore.Mvc.FromQuery(Name = "ids")] Guid[] ids, ProductCache cache, CancellationToken cancellationToken)
     {
         var distinctIds = ids.Distinct().ToArray();
         if (distinctIds.Length is 0 or > MaxLookupIds)
@@ -63,11 +64,7 @@ public static class ProductEndpoints
             });
         }
 
-        var products = await db.Products.AsNoTracking()
-            .Where(p => distinctIds.Contains(p.Id))
-            .Select(p => new ProductDto(p.Id, p.Sku, p.Name, p.Description, p.Price, p.Currency))
-            .ToListAsync(cancellationToken);
-
+        var products = await cache.GetManyAsync(distinctIds, cancellationToken);
         return Results.Ok(products);
     }
 
@@ -105,6 +102,7 @@ public static class ProductEndpoints
         Guid id,
         UpdateProductRequest request,
         CatalogDbContext db,
+        ProductCache cache,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
@@ -122,6 +120,7 @@ public static class ProductEndpoints
 
         product.Update(request.Name, request.Description ?? string.Empty, request.Price, clock.GetUtcNow());
         await db.SaveChangesAsync(cancellationToken);
+        await cache.InvalidateAsync(product.Id, cancellationToken);
 
         return Results.Ok(ProductDto.From(product));
     }
