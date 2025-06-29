@@ -1,4 +1,5 @@
 using Ordering.Api.Domain;
+using Ordering.Api.Saga;
 
 namespace Ordering.Api.Orders;
 
@@ -34,6 +35,7 @@ public sealed record OrderLineDto(Guid ProductId, string ProductName, decimal Un
 public sealed record OrderDto(
     Guid Id,
     string Status,
+    string Progress,
     decimal Total,
     string Currency,
     string? CancellationReason,
@@ -41,9 +43,11 @@ public sealed record OrderDto(
     DateTimeOffset UpdatedAt,
     IReadOnlyList<OrderLineDto> Lines)
 {
-    public static OrderDto From(Order order) => new(
+    /// <summary>Builds the response; <paramref name="saga"/> is null until the saga has picked the order up.</summary>
+    public static OrderDto From(Order order, OrderSaga? saga) => new(
         order.Id,
         order.Status.ToString(),
+        saga?.State.ToString() ?? "Submitted",
         order.Total,
         order.Currency,
         order.CancellationReason,

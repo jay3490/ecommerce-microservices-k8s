@@ -132,6 +132,43 @@ namespace Ordering.Api.Data.Migrations
                     b.ToTable("orders", (string)null);
                 });
 
+            modelBuilder.Entity("Ordering.Api.Saga.OrderSaga", b =>
+                {
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid?>("PaymentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ReservationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("OrderId");
+
+                    b.ToTable("order_sagas", (string)null);
+                });
+
             modelBuilder.Entity("Ordering.Api.Domain.Order", b =>
                 {
                     b.OwnsMany("Ordering.Api.Domain.OrderLine", "Lines", b1 =>
@@ -164,6 +201,15 @@ namespace Ordering.Api.Data.Migrations
                         });
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("Ordering.Api.Saga.OrderSaga", b =>
+                {
+                    b.HasOne("Ordering.Api.Domain.Order", null)
+                        .WithOne()
+                        .HasForeignKey("Ordering.Api.Saga.OrderSaga", "OrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

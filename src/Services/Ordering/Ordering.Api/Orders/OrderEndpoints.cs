@@ -98,7 +98,7 @@ public static class OrderEndpoints
         await db.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Order {OrderId} placed for {Total} {Currency}", order.Id, order.Total, order.Currency);
-        return Results.AcceptedAtRoute("GetOrder", new { id = order.Id }, OrderDto.From(order));
+        return Results.AcceptedAtRoute("GetOrder", new { id = order.Id }, OrderDto.From(order, saga: null));
     }
 
     private static async Task<IResult> GetOrder(
@@ -111,7 +111,13 @@ public static class OrderEndpoints
             .FirstOrDefaultAsync(o => o.Id == id && o.CustomerId == customerId, cancellationToken);
 
         // Another customer's order is reported as missing rather than forbidden.
-        return order is null ? Results.NotFound() : Results.Ok(OrderDto.From(order));
+        if (order is null)
+        {
+            return Results.NotFound();
+        }
+
+        var saga = await db.OrderSagas.AsNoTracking().FirstOrDefaultAsync(s => s.OrderId == id, cancellationToken);
+        return Results.Ok(OrderDto.From(order, saga));
     }
 
     private static async Task<IResult> ListOrders(
@@ -130,6 +136,11 @@ public static class OrderEndpoints
             .Take(MaxListedOrders)
             .ToListAsync(cancellationToken);
 
-        return Results.Ok(orders.Select(OrderDto.From));
+        var orderIds = orders.Select(o => o.Id).ToList();
+        var sagas = await db.OrderSagas.AsNoTracking()
+            .Where(s => orderIds.Contains(s.OrderId))
+            .ToDictionaryAsync(s => s.OrderId, cancellationToken);
+
+        return Results.Ok(orders.Select(o => OrderDto.From(o, sagas.GetValueOrDefault(o.Id))));
     }
 }
