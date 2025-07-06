@@ -1,0 +1,145 @@
+# Local stack: infrastructure, the four services and the gateway.
+#
+#   docker compose up --build
+#   OTLP_ENDPOINT=http://jaeger:4317 docker compose --profile observability up --build
+#
+# Only the gateway (and the RabbitMQ / Jaeger UIs) are published on the host.
+name: ecommerce
+
+x-service-env: &service-env
+  ASPNETCORE_ENVIRONMENT: Production
+  Observability__JsonLogs: "false"
+  OpenTelemetry__OtlpEndpoint: ${OTLP_ENDPOINT:-}
+  RabbitMq__Host: rabbitmq
+  RabbitMq__UserName: ${RABBITMQ_USER:-ecommerce}
+  RabbitMq__Password: ${RABBITMQ_PASSWORD:-ecommerce}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./deploy/docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-ecommerce}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-ecommerce}
+    ports:
+      - "${RABBITMQ_UI_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  catalog-api:
+    build:
+      context: .
+      dockerfile: src/Services/Catalog/Catalog.Api/Dockerfile
+    image: ecommerce/catalog-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__CatalogDb: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Database=catalog"
+      ConnectionStrings__Redis: redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ordering-api:
+    build:
+      context: .
+      dockerfile: src/Services/Ordering/Ordering.Api/Dockerfile
+    image: ecommerce/ordering-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__OrderingDb: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Database=ordering"
+      Services__Catalog: http://catalog-api:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  inventory-api:
+    build:
+      context: .
+      dockerfile: src/Services/Inventory/Inventory.Api/Dockerfile
+    image: ecommerce/inventory-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__InventoryDb: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Database=inventory"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payment-api:
+    build:
+      context: .
+      dockerfile: src/Services/Payment/Payment.Api/Dockerfile
+    image: ecommerce/payment-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__PaymentDb: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Database=payment"
+      PaymentSimulation__DeclineAmountsAbove: ${PAYMENT_DECLINE_ABOVE:-1000}
+      PaymentSimulation__DeclinedCustomerIds__0: declined-customer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: src/Gateway/Dockerfile
+    image: ecommerce/gateway:local
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      Observability__JsonLogs: "false"
+      OpenTelemetry__OtlpEndpoint: ${OTLP_ENDPOINT:-}
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:-compose-only-signing-key-change-me-0123456789}
+      Jwt__EnableDevTokenEndpoint: "true"
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog-api:8080
+      ReverseProxy__Clusters__ordering__Destinations__primary__Address: http://ordering-api:8080
+      ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory-api:8080
+      ReverseProxy__Clusters__payment__Destinations__primary__Address: http://payment-api:8080
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    depends_on:
+      - catalog-api
+      - ordering-api
+      - inventory-api
+      - payment-api
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: ["observability"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_UI_PORT:-16686}:16686"
+
+volumes:
+  postgres-data:

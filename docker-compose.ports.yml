@@ -1,0 +1,13 @@
+# Publishes the infrastructure ports on the host so the services can run with `dotnet run`:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ports.yml up -d postgres rabbitmq redis
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+  rabbitmq:
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+  redis:
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
