@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars (git-ignored) and adjust.
+environment             = "dev"
+location                = "westeurope"
+container_registry_name = "acrecommercedev12345"
