@@ -1,0 +1,87 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Dev cluster (kind, minikube, k3d): one replica of everything, in-cluster infrastructure,
+# the dev token endpoint switched on and images loaded locally (for example with
+# `kind load docker-image ecommerce/catalog-api:local`).
+
+namespace: ecommerce-dev
+
+resources:
+  - namespace.yaml
+  - ../../base
+  - infrastructure.yaml
+
+# Throwaway credentials for the in-cluster dev infrastructure only.
+secretGenerator:
+  - name: ecommerce-secrets
+    literals:
+      - postgres-password=postgres
+      - catalog-db=Host=postgres;Port=5432;Database=catalog;Username=postgres;Password=postgres
+      - ordering-db=Host=postgres;Port=5432;Database=ordering;Username=postgres;Password=postgres
+      - inventory-db=Host=postgres;Port=5432;Database=inventory;Username=postgres;Password=postgres
+      - payment-db=Host=postgres;Port=5432;Database=payment;Username=postgres;Password=postgres
+      - redis=redis:6379
+      - rabbitmq-username=ecommerce
+      - rabbitmq-password=ecommerce
+      - jwt-signing-key=dev-cluster-signing-key-change-me-0123456789
+
+images:
+  - name: ecommerce/catalog-api
+    newTag: local
+  - name: ecommerce/ordering-api
+    newTag: local
+  - name: ecommerce/inventory-api
+    newTag: local
+  - name: ecommerce/payment-api
+    newTag: local
+  - name: ecommerce/gateway
+    newTag: local
+
+patches:
+  - target:
+      kind: Deployment
+      labelSelector: app.kubernetes.io/part-of=ecommerce
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+  # With a single replica, minAvailable: 1 would block every node drain.
+  - target:
+      kind: PodDisruptionBudget
+    patch: |-
+      - op: remove
+        path: /spec/minAvailable
+      - op: add
+        path: /spec/maxUnavailable
+        value: 1
+  - target:
+      kind: Ingress
+      name: gateway
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: ecommerce.dev.local
+  - target:
+      kind: ConfigMap
+      name: gateway-config
+    patch: |-
+      - op: replace
+        path: /data/Jwt__EnableDevTokenEndpoint
+        value: "true"
+  - target:
+      kind: ConfigMap
+      name: ecommerce-config
+    patch: |-
+      - op: replace
+        path: /data/Observability__JsonLogs
+        value: "false"

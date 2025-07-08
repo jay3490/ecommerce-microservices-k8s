@@ -1,0 +1,41 @@
+# Settings shared by every service; per-service values live next to them below.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-config
+data:
+  Observability__JsonLogs: "true"
+  # Empty disables export; point at an OpenTelemetry collector to enable it.
+  OpenTelemetry__OtlpEndpoint: ""
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  Services__Catalog: http://catalog-api
+  # Applied by each service at startup. EF Core 8 takes no migration lock, so rolling out
+  # a schema change to several replicas at once relies on the migrations being idempotent.
+  Database__MigrateOnStartup: "true"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  Jwt__Issuer: ecommerce-gateway
+  Jwt__Audience: ecommerce-api
+  Jwt__Authority: ""
+  Jwt__EnableDevTokenEndpoint: "false"
+  RateLimiting__PermitLimit: "100"
+  RateLimiting__Window: "00:00:10"
+  # Requests arrive through the ingress controller, which sets X-Forwarded-For.
+  Gateway__TrustAllProxies: "true"
+  ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog-api
+  ReverseProxy__Clusters__ordering__Destinations__primary__Address: http://ordering-api
+  ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory-api
+  ReverseProxy__Clusters__payment__Destinations__primary__Address: http://payment-api
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-config
+data:
+  PaymentSimulation__DeclineAmountsAbove: "1000"
+  PaymentSimulation__DeclinedCustomerIds__0: declined-customer

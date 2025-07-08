@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-config
+data:
+  RabbitMq__Host: rabbitmq.messaging.svc.cluster.local
+  OpenTelemetry__OtlpEndpoint: http://otel-collector.observability.svc.cluster.local:4317
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  # Tokens come from the identity provider; the dev token endpoint stays off.
+  Jwt__Authority: https://login.example.com/realms/ecommerce
+  Jwt__Audience: ecommerce-api
+  Jwt__EnableDevTokenEndpoint: "false"
+  RateLimiting__PermitLimit: "50"

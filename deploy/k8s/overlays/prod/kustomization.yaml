@@ -1,0 +1,49 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Production-shaped overlay. Hostnames, the registry and the identity provider below are
+# placeholders to replace. PostgreSQL, RabbitMQ and Redis are external, and the
+# ecommerce-secrets Secret must exist in the namespace before applying
+# (see ../../base/secret.example.yaml).
+
+namespace: ecommerce
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+images:
+  - name: ecommerce/catalog-api
+    newName: registry.example.com/ecommerce/catalog-api
+    newTag: "1.0.0"
+  - name: ecommerce/ordering-api
+    newName: registry.example.com/ecommerce/ordering-api
+    newTag: "1.0.0"
+  - name: ecommerce/inventory-api
+    newName: registry.example.com/ecommerce/inventory-api
+    newTag: "1.0.0"
+  - name: ecommerce/payment-api
+    newName: registry.example.com/ecommerce/payment-api
+    newTag: "1.0.0"
+  - name: ecommerce/gateway
+    newName: registry.example.com/ecommerce/gateway
+    newTag: "1.0.0"
+
+patches:
+  - path: config-patch.yaml
+  - path: ingress-patch.yaml
+  - path: gateway-resources-patch.yaml
+  # Spread replicas over nodes and zones so one failure does not take a service down.
+  - target:
+      kind: Deployment
+    path: topology-spread-patch.yaml
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: (gateway|ordering-api)
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 10
