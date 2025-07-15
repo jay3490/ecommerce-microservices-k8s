@@ -1,0 +1,68 @@
+# Sample requests through the gateway (docker compose: port 8080; dotnet run: port 5100).
+@gateway = http://localhost:8080
+@keyboard = 8f3c2a4e-1b6d-4c1a-9e57-0a1f5b2c3d01
+@mouse = 8f3c2a4e-1b6d-4c1a-9e57-0a1f5b2c3d02
+@headset = 8f3c2a4e-1b6d-4c1a-9e57-0a1f5b2c3d04
+@dock = 8f3c2a4e-1b6d-4c1a-9e57-0a1f5b2c3d05
+
+### Customer token (dev token endpoint)
+# @name customer
+POST {{gateway}}/auth/dev-token
+Content-Type: application/json
+
+{ "subject": "alice", "roles": ["customer"] }
+
+### Admin token
+# @name admin
+POST {{gateway}}/auth/dev-token
+Content-Type: application/json
+
+{ "subject": "ops", "roles": ["admin"] }
+
+### List products (public)
+GET {{gateway}}/api/products?page=1&pageSize=10
+
+### Place an order that succeeds
+# @name order
+POST {{gateway}}/api/orders
+Authorization: Bearer {{customer.response.body.accessToken}}
+Content-Type: application/json
+
+{ "items": [ { "productId": "{{keyboard}}", "quantity": 2 }, { "productId": "{{mouse}}", "quantity": 1 } ] }
+
+### Follow the order
+GET {{gateway}}/api/orders/{{order.response.body.id}}
+Authorization: Bearer {{customer.response.body.accessToken}}
+
+### Order that fails at payment (above the decline limit) and is compensated
+POST {{gateway}}/api/orders
+Authorization: Bearer {{customer.response.body.accessToken}}
+Content-Type: application/json
+
+{ "items": [ { "productId": "{{dock}}", "quantity": 1 } ] }
+
+### Order that fails at stock reservation (headset has no stock)
+POST {{gateway}}/api/orders
+Authorization: Bearer {{customer.response.body.accessToken}}
+Content-Type: application/json
+
+{ "items": [ { "productId": "{{headset}}", "quantity": 1 } ] }
+
+### My orders
+GET {{gateway}}/api/orders
+Authorization: Bearer {{customer.response.body.accessToken}}
+
+### Stock level (admin)
+GET {{gateway}}/api/inventory/{{keyboard}}
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### Restock the headset (admin)
+PUT {{gateway}}/api/inventory/{{headset}}
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{ "available": 20 }
+
+### Payment for an order (admin)
+GET {{gateway}}/api/payments/{{order.response.body.id}}
+Authorization: Bearer {{admin.response.body.accessToken}}
