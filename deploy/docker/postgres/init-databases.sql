@@ -3,3 +3,4 @@ CREATE DATABASE catalog;
 CREATE DATABASE ordering;
 CREATE DATABASE inventory;
 CREATE DATABASE payment;
+CREATE DATABASE identity;

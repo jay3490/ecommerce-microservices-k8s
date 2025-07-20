@@ -110,6 +110,25 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  identity-api:
+    build:
+      context: .
+      dockerfile: src/Services/Identity/Identity.Api/Dockerfile
+    image: ecommerce/identity-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__IdentityDb: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Database=identity"
+      Identity__Issuer: http://identity-api:8080
+      # One replica in Compose, so a key generated at startup is acceptable here.
+      Identity__AllowEphemeralSigningKey: "true"
+      Identity__SeedAdmin__Email: ${ADMIN_EMAIL:-admin@ecommerce.local}
+      Identity__SeedAdmin__Password: ${ADMIN_PASSWORD:-Admin-Passw0rd!}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   gateway:
     build:
       context: .
@@ -119,12 +138,15 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Observability__JsonLogs: "false"
       OpenTelemetry__OtlpEndpoint: ${OTLP_ENDPOINT:-}
+      Jwt__Authority: http://identity-api:8080
+      Jwt__RequireHttpsMetadata: "false"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-compose-only-signing-key-change-me-0123456789}
       Jwt__EnableDevTokenEndpoint: "true"
       ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog-api:8080
       ReverseProxy__Clusters__ordering__Destinations__primary__Address: http://ordering-api:8080
       ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory-api:8080
       ReverseProxy__Clusters__payment__Destinations__primary__Address: http://payment-api:8080
+      ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity-api:8080
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:
@@ -132,6 +154,7 @@ services:
       - ordering-api
       - inventory-api
       - payment-api
+      - identity-api
 
   jaeger:
     image: jaegertracing/all-in-one:1.62.0

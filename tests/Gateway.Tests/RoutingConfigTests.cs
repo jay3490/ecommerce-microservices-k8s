@@ -14,6 +14,10 @@ public sealed class RoutingConfigTests(GatewayFactory factory) : IClassFixture<G
         { "orders", "ordering", "customer", null },
         { "inventory", "inventory", "admin", null },
         { "payments", "payment", "admin", null },
+        { "identity-register", "identity", "anonymous", ["POST"] },
+        { "identity-token", "identity", "anonymous", ["POST"] },
+        { "identity-account", "identity", "customer", ["GET"] },
+        { "identity-admin", "identity", "admin", null },
     };
 
     [Theory]
@@ -46,12 +50,13 @@ public sealed class RoutingConfigTests(GatewayFactory factory) : IClassFixture<G
     [Fact]
     public void Routes_are_not_left_unprotected_by_accident()
     {
-        // Only catalog reads are public; everything else needs a policy.
+        // Only catalog reads, registration and token requests are public; everything else needs a policy.
         var anonymous = Proxy().GetRoutes()
             .Where(r => string.Equals(r.Config.AuthorizationPolicy, "anonymous", StringComparison.OrdinalIgnoreCase))
-            .Select(r => r.Config.RouteId);
+            .Select(r => r.Config.RouteId)
+            .Order(StringComparer.Ordinal);
 
-        Assert.Equal(["catalog-read"], anonymous);
+        Assert.Equal(["catalog-read", "identity-register", "identity-token"], anonymous);
     }
 
     [Fact]

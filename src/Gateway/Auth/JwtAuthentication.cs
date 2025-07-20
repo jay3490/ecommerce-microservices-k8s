@@ -10,20 +10,23 @@ public sealed class JwtOptions
     public const string SectionName = "Jwt";
 
     /// <summary>
-    /// OpenID Connect authority (for example an Entra ID or Keycloak realm URL). When set,
-    /// signing keys and the issuer come from its discovery document and
-    /// <see cref="SigningKey"/> is ignored.
+    /// OpenID Connect authority: Identity.Api (for example <c>http://identity-api</c>) or an
+    /// external provider such as Entra ID or Keycloak. When set, the issuer and signing keys
+    /// come from its discovery document, and the keys are refreshed when they rotate.
     /// </summary>
     public string? Authority { get; set; }
 
     public bool RequireHttpsMetadata { get; set; } = true;
 
-    /// <summary>Issuer expected (and, for dev tokens, written) when no authority is used.</summary>
+    /// <summary>Issuer written into and expected from locally signed dev tokens.</summary>
     public string Issuer { get; set; } = "ecommerce-gateway";
 
     public string Audience { get; set; } = "ecommerce-api";
 
-    /// <summary>HMAC key for locally issued tokens; at least 32 characters.</summary>
+    /// <summary>
+    /// HMAC key for locally issued dev tokens; at least 32 characters. Accepted alongside the
+    /// authority's tokens when both are configured.
+    /// </summary>
     public string? SigningKey { get; set; }
 
     /// <summary>Exposes POST /auth/dev-token. Only for local and dev environments.</summary>
@@ -32,6 +35,8 @@ public sealed class JwtOptions
     public TimeSpan DevTokenLifetime { get; set; } = TimeSpan.FromHours(1);
 
     public bool UsesAuthority => !string.IsNullOrWhiteSpace(Authority);
+
+    public bool UsesSigningKey => !string.IsNullOrEmpty(SigningKey);
 
     public SymmetricSecurityKey CreateSigningKey() => new(Encoding.UTF8.GetBytes(SigningKey!));
 }
@@ -52,8 +57,8 @@ public static class JwtAuthenticationExtensions
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
             .Validate(
-                jwt => jwt.UsesAuthority || jwt.SigningKey is { Length: >= 32 },
-                "Configure Jwt:Authority, or Jwt:SigningKey with at least 32 characters.")
+                jwt => (jwt.UsesAuthority || jwt.UsesSigningKey) && (!jwt.UsesSigningKey || jwt.SigningKey!.Length >= 32),
+                "Configure Jwt:Authority and/or Jwt:SigningKey; a signing key needs at least 32 characters.")
             .ValidateOnStart();
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
@@ -75,12 +80,15 @@ public static class JwtAuthenticationExtensions
                     RoleClaimType = AuthPolicies.RoleClaim,
                 };
 
+                // With an authority the handler adds the issuer and keys from its discovery
+                // document to these, so dev tokens and the authority's tokens both validate.
                 if (jwt.UsesAuthority)
                 {
                     bearer.Authority = jwt.Authority;
                     bearer.RequireHttpsMetadata = jwt.RequireHttpsMetadata;
                 }
-                else
+
+                if (jwt.UsesSigningKey)
                 {
                     bearer.TokenValidationParameters.ValidIssuer = jwt.Issuer;
                     bearer.TokenValidationParameters.IssuerSigningKey = jwt.CreateSigningKey();

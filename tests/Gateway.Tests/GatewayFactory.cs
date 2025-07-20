@@ -9,9 +9,11 @@ namespace Gateway.Tests;
 /// Runs the real gateway in memory. Downstream clusters point at ports nobody listens on,
 /// so a request that passes authentication and rate limiting comes back as 502 from YARP.
 /// </summary>
-public sealed class GatewayFactory : WebApplicationFactory<Program>
+public class GatewayFactory : WebApplicationFactory<Program>
 {
     public const int PermitLimit = 3;
+
+    public static readonly string[] Clusters = ["catalog", "ordering", "inventory", "payment", "identity"];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -20,7 +22,7 @@ public sealed class GatewayFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jwt:EnableDevTokenEndpoint", "true");
         builder.UseSetting("RateLimiting:PermitLimit", PermitLimit.ToString());
         builder.UseSetting("RateLimiting:Window", "00:01:00");
-        foreach (var cluster in new[] { "catalog", "ordering", "inventory", "payment" })
+        foreach (var cluster in Clusters)
         {
             builder.UseSetting($"ReverseProxy:Clusters:{cluster}:Destinations:primary:Address", "http://127.0.0.1:9");
         }

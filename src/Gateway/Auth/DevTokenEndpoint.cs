@@ -10,9 +10,9 @@ public sealed record DevTokenRequest(string? Subject, string[]? Roles);
 public sealed record DevTokenResponse(string AccessToken, string TokenType, DateTimeOffset ExpiresAt);
 
 /// <summary>
-/// Issues HMAC-signed tokens so the system can be exercised without an identity provider.
-/// It is mapped only when <see cref="JwtOptions.EnableDevTokenEndpoint"/> is on and no
-/// external authority is configured.
+/// Issues HMAC-signed tokens so the system can be exercised without going through
+/// Identity.Api. It is mapped only when <see cref="JwtOptions.EnableDevTokenEndpoint"/> is on
+/// and a signing key is configured.
 /// </summary>
 public static class DevTokenEndpoint
 {
@@ -21,7 +21,7 @@ public static class DevTokenEndpoint
     public static IEndpointRouteBuilder MapDevTokenEndpoint(this IEndpointRouteBuilder endpoints)
     {
         var jwt = endpoints.ServiceProvider.GetRequiredService<IOptions<JwtOptions>>().Value;
-        if (!jwt.EnableDevTokenEndpoint || jwt.UsesAuthority)
+        if (!jwt.EnableDevTokenEndpoint || !jwt.UsesSigningKey)
         {
             return endpoints;
         }
