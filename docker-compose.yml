@@ -129,6 +129,21 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  basket-api:
+    build:
+      context: .
+      dockerfile: src/Services/Basket/Basket.Api/Dockerfile
+    image: ecommerce/basket-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__Redis: redis:6379
+      Services__Catalog: http://catalog-api:8080
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
   gateway:
     build:
       context: .
@@ -147,6 +162,7 @@ services:
       ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory-api:8080
       ReverseProxy__Clusters__payment__Destinations__primary__Address: http://payment-api:8080
       ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity-api:8080
+      ReverseProxy__Clusters__basket__Destinations__primary__Address: http://basket-api:8080
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:
@@ -155,6 +171,7 @@ services:
       - inventory-api
       - payment-api
       - identity-api
+      - basket-api
 
   jaeger:
     image: jaegertracing/all-in-one:1.62.0
