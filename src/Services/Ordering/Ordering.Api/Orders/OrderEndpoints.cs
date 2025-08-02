@@ -89,12 +89,7 @@ public static class OrderEndpoints
         }
 
         db.Orders.Add(order);
-        outbox.Enqueue(new OrderSubmitted(
-            order.Id,
-            order.CustomerId,
-            order.Total,
-            order.Currency,
-            order.Lines.Select(line => new OrderLineItem(line.ProductId, line.Quantity)).ToList()));
+        outbox.Enqueue(OrderMessages.Submitted(order));
         await db.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("Order {OrderId} placed for {Total} {Currency}", order.Id, order.Total, order.Currency);

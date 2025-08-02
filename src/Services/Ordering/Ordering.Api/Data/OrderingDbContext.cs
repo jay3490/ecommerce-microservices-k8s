@@ -1,5 +1,6 @@
 using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ordering.Api.Domain;
 using Ordering.Api.Saga;
 
@@ -9,6 +10,18 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
 {
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderSaga> OrderSagas => Set<OrderSaga>();
+
+    /// <summary>
+    /// SQLite, which the tests run the message handlers against, cannot compare or sort
+    /// DateTimeOffset columns; store them as numbers there. PostgreSQL is unaffected.
+    /// </summary>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
+        {
+            configurationBuilder.Properties<DateTimeOffset>().HaveConversion<DateTimeOffsetToBinaryConverter>();
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

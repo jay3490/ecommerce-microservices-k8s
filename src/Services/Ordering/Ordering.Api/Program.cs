@@ -19,6 +19,7 @@ builder.Services.AddDbContext<OrderingDbContext>(options =>
 
 builder.Services.AddMessaging(builder.Configuration, queueName: "ordering")
     .AddEntityFrameworkMessageStore<OrderingDbContext>()
+    .AddHandler<BasketCheckedOut, BasketCheckoutHandler>()
     .AddHandler<OrderSubmitted, OrderSagaHandler>()
     .AddHandler<StockReserved, OrderSagaHandler>()
     .AddHandler<StockReservationFailed, OrderSagaHandler>()
