@@ -9,7 +9,8 @@ namespace Payment.Api.Messaging;
 
 /// <summary>
 /// Charges an order through the simulator and replies to the saga. An order is never
-/// charged twice: a repeated command answers with the stored outcome.
+/// charged twice: a repeated command answers with the stored outcome, and an order whose
+/// payment was already refunded or voided is answered with a failure.
 /// </summary>
 public sealed class ProcessPaymentHandler(
     PaymentDbContext db,
@@ -43,7 +44,7 @@ public sealed class ProcessPaymentHandler(
         }
         else
         {
-            outbox.Enqueue(new PaymentFailed(message.OrderId, payment.DeclineReason ?? "Payment declined."));
+            outbox.Enqueue(new PaymentFailed(message.OrderId, payment.FailureReason));
         }
     }
 }

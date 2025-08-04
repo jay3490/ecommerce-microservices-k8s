@@ -20,6 +20,7 @@ public sealed class PaymentDbContext(DbContextOptions<PaymentDbContext> options)
             payment.Property(p => p.Currency).HasMaxLength(3).IsFixedLength();
             payment.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
             payment.Property(p => p.DeclineReason).HasMaxLength(500);
+            payment.Property(p => p.RefundReason).HasMaxLength(500);
         });
 
         modelBuilder.AddMessageStore();

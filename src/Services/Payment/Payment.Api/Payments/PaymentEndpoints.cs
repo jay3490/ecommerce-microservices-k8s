@@ -5,11 +5,19 @@ using Payment.Api.Domain;
 namespace Payment.Api.Payments;
 
 public sealed record PaymentDto(
-    Guid Id, Guid OrderId, decimal Amount, string Currency, string Status, string? DeclineReason, DateTimeOffset ProcessedAt)
+    Guid Id,
+    Guid OrderId,
+    decimal Amount,
+    string Currency,
+    string Status,
+    string? DeclineReason,
+    DateTimeOffset ProcessedAt,
+    DateTimeOffset? RefundedAt,
+    string? RefundReason)
 {
     public static PaymentDto From(PaymentRecord payment) => new(
         payment.Id, payment.OrderId, payment.Amount, payment.Currency, payment.Status.ToString(),
-        payment.DeclineReason, payment.ProcessedAt);
+        payment.DeclineReason, payment.ProcessedAt, payment.RefundedAt, payment.RefundReason);
 }
 
 public static class PaymentEndpoints

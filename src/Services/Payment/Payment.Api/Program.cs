@@ -22,7 +22,8 @@ builder.Services.AddSingleton<PaymentSimulator>();
 
 builder.Services.AddMessaging(builder.Configuration, queueName: "payment")
     .AddEntityFrameworkMessageStore<PaymentDbContext>()
-    .AddHandler<ProcessPayment, ProcessPaymentHandler>();
+    .AddHandler<ProcessPayment, ProcessPaymentHandler>()
+    .AddHandler<RefundPayment, RefundPaymentHandler>();
 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks()
