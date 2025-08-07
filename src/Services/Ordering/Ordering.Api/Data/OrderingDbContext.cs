@@ -1,6 +1,5 @@
 using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ordering.Api.Domain;
 using Ordering.Api.Saga;
 
@@ -11,17 +10,8 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderSaga> OrderSagas => Set<OrderSaga>();
 
-    /// <summary>
-    /// SQLite, which the tests run the message handlers against, cannot compare or sort
-    /// DateTimeOffset columns; store them as numbers there. PostgreSQL is unaffected.
-    /// </summary>
-    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
-    {
-        if (Database.ProviderName == "Microsoft.EntityFrameworkCore.Sqlite")
-        {
-            configurationBuilder.Properties<DateTimeOffset>().HaveConversion<DateTimeOffsetToBinaryConverter>();
-        }
-    }
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
+        configurationBuilder.ApplyProviderConventions(Database);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,9 +47,8 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             saga.Property(s => s.FailureReason).HasMaxLength(500);
             saga.Ignore(s => s.IsFinished);
 
-            // Maps to PostgreSQL's xmin system column: two handlers updating the same saga
-            // at once cannot both commit.
-            saga.Property<uint>("Version").IsRowVersion();
+            // PostgreSQL's xmin: two handlers updating the same saga at once cannot both commit.
+            saga.HasRowVersion(Database);
         });
 
         modelBuilder.AddMessageStore();
