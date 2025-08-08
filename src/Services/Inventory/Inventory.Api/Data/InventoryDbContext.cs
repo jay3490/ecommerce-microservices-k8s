@@ -16,6 +16,9 @@ public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> opti
         return await StockItems.Where(s => ids.Contains(s.ProductId)).ToDictionaryAsync(s => s.ProductId, cancellationToken);
     }
 
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
+        configurationBuilder.ApplyProviderConventions(Database);
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<StockItem>(stock =>
@@ -29,7 +32,7 @@ public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> opti
 
             // Two orders racing for the same product: the second commit fails on xmin and
             // its handler is retried against the new quantities.
-            stock.Property<uint>("Version").IsRowVersion();
+            stock.HasRowVersion(Database);
 
             stock.HasData(StockSeed.Items);
         });

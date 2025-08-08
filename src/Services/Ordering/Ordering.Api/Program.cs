@@ -30,6 +30,10 @@ builder.Services.AddMessaging(builder.Configuration, queueName: "ordering")
     .AddHandler<PaymentRefunded, OrderSagaHandler>()
     .AddHandler<StockReleased, OrderSagaHandler>();
 
+builder.Services.Configure<SagaOptions>(builder.Configuration.GetSection(SagaOptions.SectionName));
+builder.Services.AddScoped<SagaTimeoutProcessor>();
+builder.Services.AddHostedService<SagaTimeoutService>();
+
 builder.Services.AddCatalogClient(builder.Configuration);
 
 builder.Services.AddProblemDetails();

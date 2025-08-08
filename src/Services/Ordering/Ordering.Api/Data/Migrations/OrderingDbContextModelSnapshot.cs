@@ -158,6 +158,9 @@ namespace Ordering.Api.Data.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
 
+                    b.Property<int>("Timeouts")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TrackingNumber")
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
@@ -172,6 +175,8 @@ namespace Ordering.Api.Data.Migrations
                         .HasColumnName("xmin");
 
                     b.HasKey("OrderId");
+
+                    b.HasIndex("State", "UpdatedAt");
 
                     b.ToTable("order_sagas", (string)null);
                 });

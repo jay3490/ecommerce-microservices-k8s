@@ -57,8 +57,11 @@ public sealed class StockHandlers(
         var reservation = await FindReservationAsync(message.OrderId, cancellationToken);
         if (reservation is null)
         {
-            // Nothing was held (or it is already gone); confirm so the saga can finish.
+            // Nothing is held yet. Remember the release so a ReserveStock still on its way
+            // reserves nothing, and confirm so the saga can finish.
+            db.Reservations.Add(StockReservation.ReleasedBeforeReserving(message.OrderId, clock.GetUtcNow()));
             outbox.Enqueue(new StockReleased(message.OrderId));
+            logger.LogInformation("Order {OrderId} released before any stock was reserved: {Reason}", message.OrderId, message.Reason);
             return;
         }
 

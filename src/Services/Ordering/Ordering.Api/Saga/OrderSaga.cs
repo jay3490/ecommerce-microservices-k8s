@@ -55,6 +55,9 @@ public sealed record SagaStep(bool Applied, IReadOnlyList<IIntegrationMessage> M
 //        v                                  |
 //    Cancelled <-------StockReleased--------+
 //
+//  A timeout in ReservingStock goes to ReleasingStock; in ProcessingPayment or CreatingShipment
+//  it goes to RefundingPayment (also cancelling the shipment); see TimeOut.
+//
 public sealed class OrderSaga
 {
     private OrderSaga()
@@ -68,6 +71,10 @@ public sealed class OrderSaga
     public Guid? ShipmentId { get; private set; }
     public string? TrackingNumber { get; private set; }
     public string? FailureReason { get; private set; }
+
+    /// <summary>How many times a step of this saga has timed out.</summary>
+    public int Timeouts { get; private set; }
+
     public DateTimeOffset StartedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
@@ -186,6 +193,50 @@ public sealed class OrderSaga
         }
 
         return Cancel(order, now);
+    }
+
+    /// <summary>
+    /// Called when the saga has waited longer than the step timeout. A forward step is given
+    /// up: everything that might have happened is compensated, because the late reply could
+    /// still be on its way (refunding a payment that was never taken voids it; releasing stock
+    /// that was never reserved blocks a late reservation). A compensation step that has not
+    /// been confirmed is simply asked for again.
+    /// </summary>
+    public SagaStep TimeOut(Order order, DateTimeOffset now)
+    {
+        switch (State)
+        {
+            case OrderSagaState.ReservingStock:
+                FailureReason = "Timed out waiting for the inventory service.";
+                Timeouts++;
+                MoveTo(OrderSagaState.ReleasingStock, now);
+                return SagaStep.Then(new ReleaseStock(order.Id, FailureReason));
+
+            case OrderSagaState.ProcessingPayment:
+                FailureReason = "Timed out waiting for the payment service.";
+                Timeouts++;
+                MoveTo(OrderSagaState.RefundingPayment, now);
+                return SagaStep.Then(Refund(order));
+
+            case OrderSagaState.CreatingShipment:
+                FailureReason = "Timed out waiting for the shipping service.";
+                Timeouts++;
+                MoveTo(OrderSagaState.RefundingPayment, now);
+                return SagaStep.Then(new CancelShipment(order.Id, FailureReason), Refund(order));
+
+            case OrderSagaState.RefundingPayment:
+                Timeouts++;
+                MoveTo(State, now);
+                return SagaStep.Then(Refund(order));
+
+            case OrderSagaState.ReleasingStock:
+                Timeouts++;
+                MoveTo(State, now);
+                return SagaStep.Then(new ReleaseStock(order.Id, FailureReason ?? "Order cancelled"));
+
+            default:
+                return SagaStep.Ignored;
+        }
     }
 
     private RefundPayment Refund(Order order) =>

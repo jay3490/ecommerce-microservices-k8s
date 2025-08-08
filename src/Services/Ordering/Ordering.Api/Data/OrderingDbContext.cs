@@ -46,6 +46,9 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
             saga.Property(s => s.State).HasConversion<string>().HasMaxLength(30);
             saga.Property(s => s.FailureReason).HasMaxLength(500);
             saga.Property(s => s.TrackingNumber).HasMaxLength(40);
+
+            // The timeout scan looks for unfinished sagas by the time of their last step.
+            saga.HasIndex(s => new { s.State, s.UpdatedAt });
             saga.Ignore(s => s.IsFinished);
 
             // PostgreSQL's xmin: two handlers updating the same saga at once cannot both commit.

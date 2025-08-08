@@ -85,6 +85,20 @@ public sealed class StockReservation
         return new ReservationResult(reservation, null);
     }
 
+    /// <summary>
+    /// Records that the order's stock was released before anything was reserved (the saga
+    /// timed out waiting for inventory). A ReserveStock for the order that arrives later finds
+    /// this released reservation and reserves nothing.
+    /// </summary>
+    public static StockReservation ReleasedBeforeReserving(Guid orderId, DateTimeOffset now) => new()
+    {
+        Id = Guid.NewGuid(),
+        OrderId = orderId,
+        Status = ReservationStatus.Released,
+        CreatedAt = now,
+        UpdatedAt = now,
+    };
+
     /// <returns><c>false</c> if the reservation was not in the Reserved state.</returns>
     public bool Release(IReadOnlyDictionary<Guid, StockItem> stock, DateTimeOffset now) =>
         Settle(ReservationStatus.Released, stock, now, (item, quantity) => item.Release(quantity, now));
