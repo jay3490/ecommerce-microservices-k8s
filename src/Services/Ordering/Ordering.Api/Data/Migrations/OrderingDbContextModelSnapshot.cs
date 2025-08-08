@@ -147,6 +147,9 @@ namespace Ordering.Api.Data.Migrations
                     b.Property<Guid?>("ReservationId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("ShipmentId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTimeOffset>("StartedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -154,6 +157,10 @@ namespace Ordering.Api.Data.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<string>("TrackingNumber")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

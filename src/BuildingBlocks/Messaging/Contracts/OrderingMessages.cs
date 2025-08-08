@@ -19,5 +19,11 @@ public sealed record ReleaseStock(Guid OrderId, string Reason) : IIntegrationMes
 /// <summary>Command from the order saga to the payment service.</summary>
 public sealed record ProcessPayment(Guid OrderId, string CustomerId, decimal Amount, string Currency) : IIntegrationMessage;
 
-/// <summary>Payment went through and the order is final; inventory commits the reservation.</summary>
-public sealed record OrderConfirmed(Guid OrderId) : IIntegrationMessage;
+/// <summary>
+/// Paid and booked for shipping: the order is final. Inventory commits the reservation and
+/// the customer is notified.
+/// </summary>
+public sealed record OrderConfirmed(Guid OrderId, string CustomerId, decimal Total, string Currency) : IIntegrationMessage;
+
+/// <summary>The saga gave up on the order and has undone every step that had been taken.</summary>
+public sealed record OrderCancelled(Guid OrderId, string CustomerId, string Reason) : IIntegrationMessage;

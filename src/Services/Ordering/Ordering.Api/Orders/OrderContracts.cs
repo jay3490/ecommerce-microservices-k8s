@@ -39,6 +39,7 @@ public sealed record OrderDto(
     decimal Total,
     string Currency,
     string? CancellationReason,
+    string? TrackingNumber,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<OrderLineDto> Lines)
@@ -51,6 +52,7 @@ public sealed record OrderDto(
         order.Total,
         order.Currency,
         order.CancellationReason,
+        saga?.TrackingNumber,
         order.CreatedAt,
         order.UpdatedAt,
         order.Lines.Select(l => new OrderLineDto(l.ProductId, l.ProductName, l.UnitPrice, l.Quantity, l.LineTotal)).ToList());

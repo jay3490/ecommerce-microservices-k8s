@@ -42,11 +42,12 @@ public sealed class OrderSagaTests
     }
 
     [Fact]
-    public void Happy_path_reserves_stock_takes_payment_and_confirms_the_order()
+    public void Happy_path_reserves_stock_takes_payment_books_the_shipment_and_confirms_the_order()
     {
         var (saga, _) = OrderSaga.Start(_order, Now);
         var reservationId = Guid.NewGuid();
         var paymentId = Guid.NewGuid();
+        var shipmentId = Guid.NewGuid();
 
         var afterStock = saga.Handle(new StockReserved(_order.Id, reservationId), _order, Now.AddSeconds(1));
 
@@ -58,11 +59,21 @@ public sealed class OrderSagaTests
 
         var afterPayment = saga.Handle(new PaymentSucceeded(_order.Id, paymentId), _order, Now.AddSeconds(2));
 
+        Assert.Equal(OrderSagaState.CreatingShipment, saga.State);
+        Assert.Equal(paymentId, saga.PaymentId);
+        Assert.Equal(OrderStatus.Pending, _order.Status);
+        var shipment = Assert.IsType<CreateShipment>(Assert.Single(afterPayment.Messages));
+        Assert.Equal("customer-1", shipment.CustomerId);
+        Assert.Equal([new OrderLineItem(Keyboard, 2), new OrderLineItem(Mouse, 1)], shipment.Lines);
+
+        var afterShipment = saga.Handle(new ShipmentCreated(_order.Id, shipmentId, "SP0000000001"), _order, Now.AddSeconds(3));
+
         Assert.Equal(OrderSagaState.Completed, saga.State);
         Assert.True(saga.IsFinished);
-        Assert.Equal(paymentId, saga.PaymentId);
+        Assert.Equal(shipmentId, saga.ShipmentId);
+        Assert.Equal("SP0000000001", saga.TrackingNumber);
         Assert.Equal(OrderStatus.Confirmed, _order.Status);
-        Assert.Equal(new OrderConfirmed(_order.Id), Assert.Single(afterPayment.Messages));
+        Assert.Equal(new OrderConfirmed(_order.Id, "customer-1", 217.50m, "USD"), Assert.Single(afterShipment.Messages));
     }
 
     [Fact]
@@ -73,7 +84,7 @@ public sealed class OrderSagaTests
         var step = saga.Handle(new StockReservationFailed(_order.Id, "Insufficient stock for Keyboard"), _order, Now.AddSeconds(1));
 
         Assert.True(step.Applied);
-        Assert.Empty(step.Messages);
+        Assert.Equal(new OrderCancelled(_order.Id, "customer-1", "Insufficient stock for Keyboard"), Assert.Single(step.Messages));
         Assert.Equal(OrderSagaState.Cancelled, saga.State);
         Assert.Equal(OrderStatus.Cancelled, _order.Status);
         Assert.Equal("Insufficient stock for Keyboard", _order.CancellationReason);
@@ -94,7 +105,7 @@ public sealed class OrderSagaTests
         var released = saga.Handle(new StockReleased(_order.Id), _order, Now.AddSeconds(3));
 
         Assert.True(released.Applied);
-        Assert.Empty(released.Messages);
+        Assert.IsType<OrderCancelled>(Assert.Single(released.Messages));
         Assert.Equal(OrderSagaState.Cancelled, saga.State);
         Assert.Equal(OrderStatus.Cancelled, _order.Status);
         Assert.Equal("Card declined", _order.CancellationReason);
@@ -134,11 +145,52 @@ public sealed class OrderSagaTests
         var (saga, _) = OrderSaga.Start(_order, Now);
         saga.Handle(new StockReserved(_order.Id, Guid.NewGuid()), _order, Now.AddSeconds(1));
         saga.Handle(new PaymentSucceeded(_order.Id, Guid.NewGuid()), _order, Now.AddSeconds(2));
+        saga.Handle(new ShipmentCreated(_order.Id, Guid.NewGuid(), "SP1"), _order, Now.AddSeconds(2));
 
         Assert.False(saga.Handle(new PaymentFailed(_order.Id, "late"), _order, Now.AddSeconds(3)).Applied);
+        Assert.False(saga.Handle(new ShipmentCreationFailed(_order.Id, "late"), _order, Now.AddSeconds(3)).Applied);
+        Assert.False(saga.Handle(new PaymentRefunded(_order.Id, null), _order, Now.AddSeconds(3)).Applied);
         Assert.False(saga.Handle(new StockReservationFailed(_order.Id, "late"), _order, Now.AddSeconds(3)).Applied);
         Assert.False(saga.Handle(new StockReleased(_order.Id), _order, Now.AddSeconds(3)).Applied);
         Assert.Equal(OrderSagaState.Completed, saga.State);
         Assert.Equal(OrderStatus.Confirmed, _order.Status);
+    }
+
+    [Fact]
+    public void A_failed_shipment_refunds_the_payment_then_releases_the_stock_then_cancels()
+    {
+        var (saga, _) = OrderSaga.Start(_order, Now);
+        saga.Handle(new StockReserved(_order.Id, Guid.NewGuid()), _order, Now.AddSeconds(1));
+        saga.Handle(new PaymentSucceeded(_order.Id, Guid.NewGuid()), _order, Now.AddSeconds(2));
+
+        var refund = saga.Handle(new ShipmentCreationFailed(_order.Id, "Parcel limit exceeded"), _order, Now.AddSeconds(3));
+
+        Assert.Equal(OrderSagaState.RefundingPayment, saga.State);
+        Assert.Equal(new RefundPayment(_order.Id, "customer-1", 217.50m, "USD", "Parcel limit exceeded"), Assert.Single(refund.Messages));
+        Assert.Equal(OrderStatus.Pending, _order.Status);
+
+        var release = saga.Handle(new PaymentRefunded(_order.Id, Guid.NewGuid()), _order, Now.AddSeconds(4));
+
+        Assert.Equal(OrderSagaState.ReleasingStock, saga.State);
+        Assert.Equal(new ReleaseStock(_order.Id, "Parcel limit exceeded"), Assert.Single(release.Messages));
+
+        var cancelled = saga.Handle(new StockReleased(_order.Id), _order, Now.AddSeconds(5));
+
+        Assert.Equal(OrderSagaState.Cancelled, saga.State);
+        Assert.Equal(OrderStatus.Cancelled, _order.Status);
+        Assert.Equal("Parcel limit exceeded", _order.CancellationReason);
+        Assert.Equal(new OrderCancelled(_order.Id, "customer-1", "Parcel limit exceeded"), Assert.Single(cancelled.Messages));
+    }
+
+    [Fact]
+    public void Shipping_replies_are_only_accepted_while_creating_the_shipment()
+    {
+        var (saga, _) = OrderSaga.Start(_order, Now);
+        saga.Handle(new StockReserved(_order.Id, Guid.NewGuid()), _order, Now.AddSeconds(1));
+
+        Assert.False(saga.Handle(new ShipmentCreated(_order.Id, Guid.NewGuid(), "SP1"), _order, Now.AddSeconds(2)).Applied);
+        Assert.False(saga.Handle(new ShipmentCreationFailed(_order.Id, "early"), _order, Now.AddSeconds(2)).Applied);
+        Assert.False(saga.Handle(new PaymentRefunded(_order.Id, null), _order, Now.AddSeconds(2)).Applied);
+        Assert.Equal(OrderSagaState.ProcessingPayment, saga.State);
     }
 }

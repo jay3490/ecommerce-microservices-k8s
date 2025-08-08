@@ -24,6 +24,9 @@ public sealed class OrderSagaHandler(
     IMessageHandler<StockReservationFailed>,
     IMessageHandler<PaymentSucceeded>,
     IMessageHandler<PaymentFailed>,
+    IMessageHandler<ShipmentCreated>,
+    IMessageHandler<ShipmentCreationFailed>,
+    IMessageHandler<PaymentRefunded>,
     IMessageHandler<StockReleased>
 {
     private static readonly Counter<long> Transitions =
@@ -60,6 +63,15 @@ public sealed class OrderSagaHandler(
         AdvanceAsync(message.OrderId, context, (saga, order, now) => saga.Handle(message, order, now), cancellationToken);
 
     public Task HandleAsync(PaymentFailed message, MessageContext context, CancellationToken cancellationToken) =>
+        AdvanceAsync(message.OrderId, context, (saga, order, now) => saga.Handle(message, order, now), cancellationToken);
+
+    public Task HandleAsync(ShipmentCreated message, MessageContext context, CancellationToken cancellationToken) =>
+        AdvanceAsync(message.OrderId, context, (saga, order, now) => saga.Handle(message, order, now), cancellationToken);
+
+    public Task HandleAsync(ShipmentCreationFailed message, MessageContext context, CancellationToken cancellationToken) =>
+        AdvanceAsync(message.OrderId, context, (saga, order, now) => saga.Handle(message, order, now), cancellationToken);
+
+    public Task HandleAsync(PaymentRefunded message, MessageContext context, CancellationToken cancellationToken) =>
         AdvanceAsync(message.OrderId, context, (saga, order, now) => saga.Handle(message, order, now), cancellationToken);
 
     public Task HandleAsync(StockReleased message, MessageContext context, CancellationToken cancellationToken) =>

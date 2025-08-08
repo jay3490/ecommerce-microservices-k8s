@@ -12,13 +12,19 @@ public enum OrderSagaState
     /// <summary>Stock is held, ProcessPayment sent, waiting for the payment service.</summary>
     ProcessingPayment,
 
-    /// <summary>Payment failed; compensating by asking inventory to release the stock.</summary>
+    /// <summary>Paid, CreateShipment sent, waiting for the shipping service.</summary>
+    CreatingShipment,
+
+    /// <summary>A step after payment failed; compensating by refunding the payment.</summary>
+    RefundingPayment,
+
+    /// <summary>Compensating by asking inventory to release the reserved stock.</summary>
     ReleasingStock,
 
-    /// <summary>Paid and confirmed.</summary>
+    /// <summary>Paid, booked for shipping and confirmed.</summary>
     Completed,
 
-    /// <summary>Stopped by a failure, with any reserved stock released.</summary>
+    /// <summary>Stopped by a failure, with every completed step undone.</summary>
     Cancelled,
 }
 
@@ -31,18 +37,23 @@ public sealed record SagaStep(bool Applied, IReadOnlyList<IIntegrationMessage> M
 }
 
 /// <summary>
-/// Orchestrates one order: reserve stock, take payment, confirm; on a payment failure it
-/// releases the reservation before cancelling. The state is persisted after every step, so
-/// the saga resumes correctly after a restart. Each method accepts a message only in the
-/// state that expects it; anything else (a late duplicate, a reply for an older step) is
-/// ignored and leaves the saga unchanged.
+/// Orchestrates one order: reserve stock, take payment, book the shipment, confirm. A failure
+/// undoes the completed steps in reverse order (refund, then release the stock) before the
+/// order is cancelled. The state is persisted after every step, so the saga resumes correctly
+/// after a restart. Each method accepts a message only in the state that expects it;
+/// anything else (a late duplicate, a reply for an older step) is ignored and leaves the
+/// saga unchanged.
 /// </summary>
 //
-//  ReservingStock --StockReserved--> ProcessingPayment --PaymentSucceeded--> Completed
-//        |                                  |
-//   StockReservationFailed            PaymentFailed
-//        v                                  v
-//    Cancelled <-------StockReleased---- ReleasingStock
+//  ReservingStock --StockReserved--> ProcessingPayment --PaymentSucceeded--> CreatingShipment --ShipmentCreated--> Completed
+//        |                                  |                                       |
+//   StockReservationFailed            PaymentFailed                      ShipmentCreationFailed
+//        |                                  |                                       v
+//        |                                  |                               RefundingPayment
+//        |                                  v                                       |
+//        |                            ReleasingStock <-------PaymentRefunded--------+
+//        v                                  |
+//    Cancelled <-------StockReleased--------+
 //
 public sealed class OrderSaga
 {
@@ -54,6 +65,8 @@ public sealed class OrderSaga
     public OrderSagaState State { get; private set; }
     public Guid? ReservationId { get; private set; }
     public Guid? PaymentId { get; private set; }
+    public Guid? ShipmentId { get; private set; }
+    public string? TrackingNumber { get; private set; }
     public string? FailureReason { get; private set; }
     public DateTimeOffset StartedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -75,8 +88,7 @@ public sealed class OrderSaga
             UpdatedAt = now,
         };
 
-        var lines = order.Lines.Select(line => new OrderLineItem(line.ProductId, line.Quantity)).ToList();
-        return (saga, SagaStep.Then(new ReserveStock(order.Id, lines)));
+        return (saga, SagaStep.Then(new ReserveStock(order.Id, Lines(order))));
     }
 
     public SagaStep Handle(StockReserved message, Order order, DateTimeOffset now)
@@ -100,9 +112,7 @@ public sealed class OrderSaga
 
         // Nothing was reserved, so there is nothing to compensate.
         FailureReason = message.Reason;
-        order.Cancel(message.Reason, now);
-        MoveTo(OrderSagaState.Cancelled, now);
-        return SagaStep.Then();
+        return Cancel(order, now);
     }
 
     public SagaStep Handle(PaymentSucceeded message, Order order, DateTimeOffset now)
@@ -113,9 +123,8 @@ public sealed class OrderSaga
         }
 
         PaymentId = message.PaymentId;
-        order.Confirm(now);
-        MoveTo(OrderSagaState.Completed, now);
-        return SagaStep.Then(new OrderConfirmed(order.Id));
+        MoveTo(OrderSagaState.CreatingShipment, now);
+        return SagaStep.Then(new CreateShipment(order.Id, order.CustomerId, Lines(order)));
     }
 
     public SagaStep Handle(PaymentFailed message, Order order, DateTimeOffset now)
@@ -125,10 +134,48 @@ public sealed class OrderSaga
             return SagaStep.Ignored;
         }
 
-        // Compensate the reservation before the order is cancelled.
+        // No money was taken; only the reservation has to be undone.
         FailureReason = message.Reason;
         MoveTo(OrderSagaState.ReleasingStock, now);
         return SagaStep.Then(new ReleaseStock(order.Id, message.Reason));
+    }
+
+    public SagaStep Handle(ShipmentCreated message, Order order, DateTimeOffset now)
+    {
+        if (State != OrderSagaState.CreatingShipment)
+        {
+            return SagaStep.Ignored;
+        }
+
+        ShipmentId = message.ShipmentId;
+        TrackingNumber = message.TrackingNumber;
+        order.Confirm(now);
+        MoveTo(OrderSagaState.Completed, now);
+        return SagaStep.Then(new OrderConfirmed(order.Id, order.CustomerId, order.Total, order.Currency));
+    }
+
+    public SagaStep Handle(ShipmentCreationFailed message, Order order, DateTimeOffset now)
+    {
+        if (State != OrderSagaState.CreatingShipment)
+        {
+            return SagaStep.Ignored;
+        }
+
+        // Undo in reverse order: the payment first, then the reservation.
+        FailureReason = message.Reason;
+        MoveTo(OrderSagaState.RefundingPayment, now);
+        return SagaStep.Then(Refund(order));
+    }
+
+    public SagaStep Handle(PaymentRefunded message, Order order, DateTimeOffset now)
+    {
+        if (State != OrderSagaState.RefundingPayment)
+        {
+            return SagaStep.Ignored;
+        }
+
+        MoveTo(OrderSagaState.ReleasingStock, now);
+        return SagaStep.Then(new ReleaseStock(order.Id, FailureReason ?? "Order cancelled"));
     }
 
     public SagaStep Handle(StockReleased message, Order order, DateTimeOffset now)
@@ -138,9 +185,18 @@ public sealed class OrderSaga
             return SagaStep.Ignored;
         }
 
-        order.Cancel(FailureReason ?? "Payment failed", now);
+        return Cancel(order, now);
+    }
+
+    private RefundPayment Refund(Order order) =>
+        new(order.Id, order.CustomerId, order.Total, order.Currency, FailureReason ?? "Order cancelled");
+
+    private SagaStep Cancel(Order order, DateTimeOffset now)
+    {
+        var reason = FailureReason ?? "Order cancelled";
+        order.Cancel(reason, now);
         MoveTo(OrderSagaState.Cancelled, now);
-        return SagaStep.Then();
+        return SagaStep.Then(new OrderCancelled(order.Id, order.CustomerId, reason));
     }
 
     private void MoveTo(OrderSagaState state, DateTimeOffset now)
@@ -148,4 +204,7 @@ public sealed class OrderSaga
         State = state;
         UpdatedAt = now;
     }
+
+    private static List<OrderLineItem> Lines(Order order) =>
+        order.Lines.Select(line => new OrderLineItem(line.ProductId, line.Quantity)).ToList();
 }

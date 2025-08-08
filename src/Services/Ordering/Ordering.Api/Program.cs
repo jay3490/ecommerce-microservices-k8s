@@ -25,6 +25,9 @@ builder.Services.AddMessaging(builder.Configuration, queueName: "ordering")
     .AddHandler<StockReservationFailed, OrderSagaHandler>()
     .AddHandler<PaymentSucceeded, OrderSagaHandler>()
     .AddHandler<PaymentFailed, OrderSagaHandler>()
+    .AddHandler<ShipmentCreated, OrderSagaHandler>()
+    .AddHandler<ShipmentCreationFailed, OrderSagaHandler>()
+    .AddHandler<PaymentRefunded, OrderSagaHandler>()
     .AddHandler<StockReleased, OrderSagaHandler>();
 
 builder.Services.AddCatalogClient(builder.Configuration);
