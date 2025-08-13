@@ -5,3 +5,4 @@ CREATE DATABASE inventory;
 CREATE DATABASE payment;
 CREATE DATABASE identity;
 CREATE DATABASE shipping;
+CREATE DATABASE notification;

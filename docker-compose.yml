@@ -159,6 +159,31 @@ services:
       rabbitmq:
         condition: service_healthy
 
+  notification-worker:
+    build:
+      context: .
+      dockerfile: src/Services/Notification/Notification.Worker/Dockerfile
+    image: ecommerce/notification-worker:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__NotificationDb: "Host=postgres;Port=5432;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Database=notification"
+      Email__Sink: Smtp
+      Email__Smtp__Host: mailpit
+      Email__Smtp__Port: "1025"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  # Catches the notification emails; read them at http://localhost:8025.
+  mailpit:
+    image: axllent/mailpit:v1.20
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
   gateway:
     build:
       context: .
