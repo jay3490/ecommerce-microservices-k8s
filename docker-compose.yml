@@ -50,6 +50,16 @@ services:
       timeout: 3s
       retries: 20
 
+  mongo:
+    image: mongo:7.0
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   catalog-api:
     build:
       context: .
@@ -184,6 +194,19 @@ services:
     ports:
       - "${MAILPIT_UI_PORT:-8025}:8025"
 
+  reviews-api:
+    build:
+      context: .
+      dockerfile: src/Services/Reviews/Reviews.Api/Dockerfile
+    image: ecommerce/reviews-api:local
+    environment:
+      <<: *service-env
+      ConnectionStrings__ReviewsDb: mongodb://mongo:27017
+      Services__Catalog: http://catalog-api:8080
+    depends_on:
+      mongo:
+        condition: service_healthy
+
   gateway:
     build:
       context: .
@@ -204,6 +227,7 @@ services:
       ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity-api:8080
       ReverseProxy__Clusters__basket__Destinations__primary__Address: http://basket-api:8080
       ReverseProxy__Clusters__shipping__Destinations__primary__Address: http://shipping-api:8080
+      ReverseProxy__Clusters__reviews__Destinations__primary__Address: http://reviews-api:8080
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:
@@ -214,6 +238,7 @@ services:
       - identity-api
       - basket-api
       - shipping-api
+      - reviews-api
 
   jaeger:
     image: jaegertracing/all-in-one:1.62.0
@@ -225,3 +250,4 @@ services:
 
 volumes:
   postgres-data:
+  mongo-data:

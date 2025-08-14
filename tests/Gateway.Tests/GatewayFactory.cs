@@ -13,7 +13,7 @@ public class GatewayFactory : WebApplicationFactory<Program>
 {
     public const int PermitLimit = 3;
 
-    public static readonly string[] Clusters = ["catalog", "ordering", "inventory", "payment", "identity", "basket", "shipping"];
+    public static readonly string[] Clusters = ["catalog", "ordering", "inventory", "payment", "identity", "basket", "shipping", "reviews"];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
