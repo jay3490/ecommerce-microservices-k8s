@@ -228,6 +228,7 @@ services:
       ReverseProxy__Clusters__basket__Destinations__primary__Address: http://basket-api:8080
       ReverseProxy__Clusters__shipping__Destinations__primary__Address: http://shipping-api:8080
       ReverseProxy__Clusters__reviews__Destinations__primary__Address: http://reviews-api:8080
+      ReverseProxy__Clusters__notification__Destinations__primary__Address: http://notification-worker:8080
     ports:
       - "${GATEWAY_PORT:-8080}:8080"
     depends_on:

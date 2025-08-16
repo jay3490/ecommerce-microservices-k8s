@@ -24,6 +24,12 @@ public sealed class RoutingConfigTests(GatewayFactory factory) : IClassFixture<G
         { "reviews-read", "reviews", "anonymous", ["GET"] },
         { "reviews-write", "reviews", "customer", ["PUT", "DELETE"] },
         { "reviews-admin", "reviews", "admin", ["POST"] },
+        { "admin-ordering", "ordering", "admin", null },
+        { "admin-inventory", "inventory", "admin", null },
+        { "admin-payment", "payment", "admin", null },
+        { "admin-shipping", "shipping", "admin", null },
+        { "admin-notification", "notification", "admin", null },
+        { "admin-identity", "identity", "admin", null },
     };
 
     [Theory]

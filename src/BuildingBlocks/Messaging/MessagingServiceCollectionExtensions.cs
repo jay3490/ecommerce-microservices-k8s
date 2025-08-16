@@ -1,5 +1,6 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Inbox;
+using BuildingBlocks.Messaging.DeadLetters;
 using BuildingBlocks.Messaging.RabbitMq;
 using BuildingBlocks.Outbox;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,7 @@ public static class MessagingServiceCollectionExtensions
         var registry = new MessageHandlerRegistry();
         services.AddSingleton(registry);
         services.AddHostedService<RabbitMqConsumerService>();
+        services.AddDeadLetterTooling();
 
         services.AddHealthChecks()
             .AddCheck<RabbitMqHealthCheck>("rabbitmq", tags: [HealthTags.Ready]);

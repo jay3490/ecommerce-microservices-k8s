@@ -1,7 +1,9 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Contracts;
+using BuildingBlocks.Messaging.DeadLetters;
 using BuildingBlocks.Observability;
+using BuildingBlocks.Outbox;
 using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Ordering.Api.Catalog;
@@ -45,6 +47,8 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseServiceDefaults();
 app.MapOrderEndpoints();
+app.MapDeadLetterEndpoints();
+app.MapOutboxAdminEndpoints<OrderingDbContext>();
 
 await app.MigrateDatabaseAsync<OrderingDbContext>();
 await app.RunAsync();

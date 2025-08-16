@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\BuildingBlocks.csproj" />
+    <ProjectReference Include="..\..\tools\DeadLetters.Cli\DeadLetters.Cli.csproj" />
   </ItemGroup>
 
 </Project>

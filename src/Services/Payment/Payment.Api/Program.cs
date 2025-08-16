@@ -1,7 +1,9 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Contracts;
+using BuildingBlocks.Messaging.DeadLetters;
 using BuildingBlocks.Observability;
+using BuildingBlocks.Outbox;
 using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Payment.Api.Data;
@@ -34,6 +36,8 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseServiceDefaults();
 app.MapPaymentEndpoints();
+app.MapDeadLetterEndpoints();
+app.MapOutboxAdminEndpoints<PaymentDbContext>();
 
 await app.MigrateDatabaseAsync<PaymentDbContext>();
 await app.RunAsync();

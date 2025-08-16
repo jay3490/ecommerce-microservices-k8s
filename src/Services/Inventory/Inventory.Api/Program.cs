@@ -1,7 +1,9 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Contracts;
+using BuildingBlocks.Messaging.DeadLetters;
 using BuildingBlocks.Observability;
+using BuildingBlocks.Outbox;
 using BuildingBlocks.Persistence;
 using Inventory.Api.Data;
 using Inventory.Api.Messaging;
@@ -31,6 +33,8 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseServiceDefaults();
 app.MapStockEndpoints();
+app.MapDeadLetterEndpoints();
+app.MapOutboxAdminEndpoints<InventoryDbContext>();
 
 await app.MigrateDatabaseAsync<InventoryDbContext>();
 await app.RunAsync();

@@ -126,4 +126,15 @@ public sealed class GatewayPipelineTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    [Fact]
+    public async Task Dead_letter_tooling_is_for_admins_only()
+    {
+        using var factory = new GatewayFactory();
+        using var customer = await factory.CreateClientWithTokenAsync("customer-42", "customer");
+        using var admin = await factory.CreateClientWithTokenAsync("ops-1", "admin");
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await customer.GetAsync("/api/admin/ordering/dead-letters")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadGateway, (await admin.GetAsync("/api/admin/ordering/dead-letters")).StatusCode);
+    }
 }

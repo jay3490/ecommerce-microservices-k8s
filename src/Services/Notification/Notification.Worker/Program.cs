@@ -1,7 +1,9 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Contracts;
+using BuildingBlocks.Messaging.DeadLetters;
 using BuildingBlocks.Observability;
+using BuildingBlocks.Outbox;
 using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Notification.Worker.Data;
@@ -34,6 +36,8 @@ builder.Services.AddHealthChecks()
 var app = builder.Build();
 
 app.UseServiceDefaults();
+app.MapDeadLetterEndpoints();
+app.MapOutboxAdminEndpoints<NotificationDbContext>();
 
 await app.MigrateDatabaseAsync<NotificationDbContext>();
 await app.RunAsync();

@@ -1,6 +1,7 @@
 using BuildingBlocks.Health;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Observability;
+using BuildingBlocks.Outbox;
 using BuildingBlocks.Persistence;
 using Identity.Api.Accounts;
 using Identity.Api.Data;
@@ -55,6 +56,7 @@ app.UseExceptionHandler();
 app.UseServiceDefaults();
 app.MapDiscoveryEndpoints();
 app.MapAccountEndpoints();
+app.MapOutboxAdminEndpoints<AppIdentityDbContext>();
 
 await app.MigrateDatabaseAsync<AppIdentityDbContext>();
 await app.SeedIdentityAsync();
