@@ -216,6 +216,7 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       Observability__JsonLogs: "false"
       OpenTelemetry__OtlpEndpoint: ${OTLP_ENDPOINT:-}
+      ConnectionStrings__Redis: redis:6379
       Jwt__Authority: http://identity-api:8080
       Jwt__RequireHttpsMetadata: "false"
       Jwt__SigningKey: ${JWT_SIGNING_KEY:-compose-only-signing-key-change-me-0123456789}

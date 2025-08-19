@@ -3,6 +3,7 @@ using BuildingBlocks.Observability;
 using Gateway.Auth;
 using Gateway.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
+using StackExchange.Redis;
 using Yarp.ReverseProxy.Transforms;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,6 +11,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults("gateway");
 
 builder.Services.AddSingleton(TimeProvider.System);
+
+// Shared state between gateway replicas (rate limit counters) lives in Redis when configured.
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    {
+        var options = ConfigurationOptions.Parse(redisConnectionString);
+        options.AbortOnConnectFail = false;
+        return ConnectionMultiplexer.Connect(options);
+    });
+}
+
 builder.Services.AddGatewayAuthentication(builder.Configuration);
 builder.Services.AddGatewayRateLimiting(builder.Configuration);
 

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading.RateLimiting;
 using Gateway.Auth;
 using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace Gateway.RateLimiting;
 
@@ -20,11 +21,29 @@ public static class RateLimitingExtensions
 {
     /// <summary>
     /// Fixed-window limit per client: per authenticated subject, otherwise per client IP.
-    /// Limits are kept in memory, so with several gateway replicas each enforces its own.
+    /// With a Redis connection (<c>ConnectionStrings:Redis</c>) the counters are shared by all
+    /// gateway replicas; without one each replica counts on its own.
     /// </summary>
     public static IServiceCollection AddGatewayRateLimiting(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddOptions<RateLimitingOptions>().Bind(configuration.GetSection(RateLimitingOptions.SectionName));
+        services.AddOptions<RateLimitingOptions>()
+            .Bind(configuration.GetSection(RateLimitingOptions.SectionName))
+            .Validate(o => o.PermitLimit > 0 && o.Window > TimeSpan.Zero, "RateLimiting needs a positive PermitLimit and Window.")
+            .ValidateOnStart();
+
+        services.AddSingleton<InMemoryRateLimitStore>();
+        if (string.IsNullOrWhiteSpace(configuration.GetConnectionString("Redis")))
+        {
+            services.AddSingleton<IRateLimitStore>(provider => provider.GetRequiredService<InMemoryRateLimitStore>());
+        }
+        else
+        {
+            services.AddSingleton<IRateLimitStore>(provider => new RedisRateLimitStore(
+                provider.GetRequiredService<IConnectionMultiplexer>(),
+                provider.GetRequiredService<InMemoryRateLimitStore>(),
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<RedisRateLimitStore>>()));
+        }
 
         services.AddRateLimiter(limiter =>
         {
@@ -42,18 +61,19 @@ public static class RateLimitingExtensions
 
             limiter.AddPolicy(RateLimitingOptions.PerClientPolicy, httpContext =>
             {
-                var settings = httpContext.RequestServices.GetRequiredService<IOptions<RateLimitingOptions>>().Value;
+                var services = httpContext.RequestServices;
+                var settings = services.GetRequiredService<IOptions<RateLimitingOptions>>().Value;
                 var subject = httpContext.User.FindFirst(AuthPolicies.SubjectClaim)?.Value;
                 var key = subject is not null
                     ? $"sub:{subject}"
                     : $"ip:{httpContext.Connection.RemoteIpAddress}";
 
-                return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = settings.PermitLimit,
-                    Window = settings.Window,
-                    QueueLimit = 0,
-                });
+                return RateLimitPartition.Get(key, partitionKey => new DistributedFixedWindowRateLimiter(
+                    services.GetRequiredService<IRateLimitStore>(),
+                    partitionKey,
+                    settings.PermitLimit,
+                    settings.Window,
+                    services.GetRequiredService<TimeProvider>()));
             });
         });
 
