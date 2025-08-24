@@ -1,6 +1,8 @@
 using BuildingBlocks.Http;
 using BuildingBlocks.Observability;
 using Gateway.Auth;
+using Gateway.Caching;
+using Gateway.Limits;
 using Gateway.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 using StackExchange.Redis;
@@ -26,22 +28,29 @@ if (!string.IsNullOrWhiteSpace(redisConnectionString))
 
 builder.Services.AddGatewayAuthentication(builder.Configuration);
 builder.Services.AddGatewayRateLimiting(builder.Configuration);
+builder.Services.AddCatalogCaching(builder.Configuration);
+builder.Services.Configure<SizeLimitOptions>(builder.Configuration.GetSection(SizeLimitOptions.SectionName));
 
 builder.Services.AddReverseProxy()
     .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
-    .AddTransforms(context => context.AddRequestTransform(transform =>
+    .AddTransforms(context =>
     {
-        // Services trust this header, so never forward a client-supplied value; set it only
-        // from the token the gateway has just validated.
-        transform.ProxyRequest.Headers.Remove(KnownHeaders.CustomerId);
-        var subject = transform.HttpContext.User.FindFirst(AuthPolicies.SubjectClaim)?.Value;
-        if (subject is not null)
+        context.AddRequestTransform(transform =>
         {
-            transform.ProxyRequest.Headers.TryAddWithoutValidation(KnownHeaders.CustomerId, subject);
-        }
+            // Services trust this header, so never forward a client-supplied value; set it only
+            // from the token the gateway has just validated.
+            transform.ProxyRequest.Headers.Remove(KnownHeaders.CustomerId);
+            var subject = transform.HttpContext.User.FindFirst(AuthPolicies.SubjectClaim)?.Value;
+            if (subject is not null)
+            {
+                transform.ProxyRequest.Headers.TryAddWithoutValidation(KnownHeaders.CustomerId, subject);
+            }
 
-        return ValueTask.CompletedTask;
-    }));
+            return ValueTask.CompletedTask;
+        });
+        CatalogCaching.AddCatalogEviction(context);
+        SizeLimitMiddleware.AddResponseSizeCheck(context);
+    });
 
 // Behind an ingress controller the client address arrives in X-Forwarded-For.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
@@ -58,9 +67,11 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseServiceDefaults();
+app.UseMiddleware<SizeLimitMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+app.UseOutputCache();
 
 app.MapDevTokenEndpoint();
 app.MapReverseProxy();
