@@ -57,7 +57,9 @@ public static class ServiceDefaultsExtensions
     {
         var jsonLogs = builder.Configuration.GetValue("Observability:JsonLogs", false);
 
-        builder.Host.UseSerilog((context, services, logger) =>
+        // writeToProviders also hands every event to the OpenTelemetry logger provider (when
+        // OTLP export is configured), which ships it to the collector with the trace context.
+        builder.Host.UseSerilog(writeToProviders: true, configureLogger: (context, services, logger) =>
         {
             logger
                 .ReadFrom.Configuration(context.Configuration)
@@ -94,11 +96,13 @@ public static class ServiceDefaultsExtensions
                 .AddMeter(Telemetry.Name));
 
         // Export only when a collector is configured, so running locally without one stays quiet.
+        // Traces, metrics and logs then all go to the same OTLP endpoint.
         var endpoint = builder.Configuration["OpenTelemetry:OtlpEndpoint"];
         if (!string.IsNullOrWhiteSpace(endpoint))
         {
             var protocol = builder.Configuration.GetValue("OpenTelemetry:Protocol", OtlpExportProtocol.Grpc);
-            otel.UseOtlpExporter(protocol, new Uri(endpoint));
+            otel.WithLogging(logging => { }, options => options.IncludeScopes = true)
+                .UseOtlpExporter(protocol, new Uri(endpoint));
         }
     }
 

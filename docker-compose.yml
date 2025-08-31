@@ -1,9 +1,10 @@
-# Local stack: infrastructure, the four services and the gateway.
+# Local stack: infrastructure, the nine services and the gateway.
 #
 #   docker compose up --build
-#   OTLP_ENDPOINT=http://jaeger:4317 docker compose --profile observability up --build
+#   OTLP_ENDPOINT=http://otel-collector:4317 docker compose --profile observability up --build
 #
-# Only the gateway (and the RabbitMQ / Jaeger UIs) are published on the host.
+# Only the gateway and the operator UIs (RabbitMQ, Mailpit, and with the observability
+# profile Grafana, Prometheus and Jaeger) are published on the host.
 name: ecommerce
 
 x-service-env: &service-env
@@ -242,6 +243,19 @@ services:
       - shipping-api
       - reviews-api
 
+  # Observability profile. Services send traces, metrics and logs to the collector when
+  # OTLP_ENDPOINT=http://otel-collector:4317; the configuration files are shared with the
+  # Kubernetes manifests in deploy/k8s/observability.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.111.0
+    profiles: ["observability"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deploy/k8s/observability/config/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+      - loki
+
   jaeger:
     image: jaegertracing/all-in-one:1.62.0
     profiles: ["observability"]
@@ -249,6 +263,41 @@ services:
       COLLECTOR_OTLP_ENABLED: "true"
     ports:
       - "${JAEGER_UI_PORT:-16686}:16686"
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    profiles: ["observability"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./deploy/k8s/observability/config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+
+  loki:
+    image: grafana/loki:3.2.0
+    profiles: ["observability"]
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./deploy/k8s/observability/config/loki.yaml:/etc/loki/loki.yaml:ro
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./deploy/k8s/observability/config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/k8s/observability/config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
 
 volumes:
   postgres-data:

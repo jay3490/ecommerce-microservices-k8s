@@ -1,0 +1,48 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Observability stack in its own namespace: OpenTelemetry Collector, Jaeger, Prometheus,
+# Loki and Grafana with provisioned datasources and dashboards. Single replicas with
+# ephemeral storage: suitable for dev clusters and as a starting point, not as a durable
+# monitoring platform (see the README's production considerations).
+#
+#   kubectl apply -k deploy/k8s/observability
+#
+# The services export to it when
+# OpenTelemetry__OtlpEndpoint=http://otel-collector.observability.svc.cluster.local:4317.
+
+namespace: observability
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: ecommerce-observability
+    includeSelectors: false
+
+resources:
+  - namespace.yaml
+  - otel-collector.yaml
+  - jaeger.yaml
+  - prometheus.yaml
+  - loki.yaml
+  - grafana.yaml
+
+configMapGenerator:
+  - name: otel-collector-config
+    files:
+      - config.yaml=config/otel-collector.yaml
+  - name: prometheus-config
+    files:
+      - prometheus.yml=config/prometheus-kubernetes.yml
+  - name: loki-config
+    files:
+      - loki.yaml=config/loki.yaml
+  - name: grafana-datasources
+    files:
+      - datasources.yaml=config/grafana/provisioning/datasources/datasources.yaml
+  - name: grafana-dashboard-provider
+    files:
+      - dashboards.yaml=config/grafana/provisioning/dashboards/dashboards.yaml
+  - name: grafana-dashboards
+    files:
+      - config/grafana/dashboards/service-red.json
+      - config/grafana/dashboards/saga-outcomes.json
