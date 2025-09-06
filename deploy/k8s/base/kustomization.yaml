@@ -1,8 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Application workloads only. PostgreSQL, RabbitMQ and Redis are expected to exist already
-# (managed services in prod, in-cluster single instances in the dev overlay), and the
+# Application workloads only: the gateway, eight APIs and the notification worker.
+# PostgreSQL, MongoDB, RabbitMQ and Redis are expected to exist already (managed services in
+# prod, in-cluster single instances in the dev overlay), and the
 # ecommerce-secrets Secret is created outside of this repository (see secret.example.yaml).
 
 labels:
@@ -13,6 +14,11 @@ labels:
 resources:
   - configmap.yaml
   - network-policy.yaml
+  - gateway/deployment.yaml
+  - gateway/service.yaml
+  - gateway/hpa.yaml
+  - gateway/pdb.yaml
+  - gateway/ingress.yaml
   - catalog/deployment.yaml
   - catalog/service.yaml
   - catalog/hpa.yaml
@@ -29,8 +35,22 @@ resources:
   - payment/service.yaml
   - payment/hpa.yaml
   - payment/pdb.yaml
-  - gateway/deployment.yaml
-  - gateway/service.yaml
-  - gateway/hpa.yaml
-  - gateway/pdb.yaml
-  - gateway/ingress.yaml
+  - identity/deployment.yaml
+  - identity/service.yaml
+  - identity/hpa.yaml
+  - identity/pdb.yaml
+  - basket/deployment.yaml
+  - basket/service.yaml
+  - basket/hpa.yaml
+  - basket/pdb.yaml
+  - shipping/deployment.yaml
+  - shipping/service.yaml
+  - shipping/hpa.yaml
+  - shipping/pdb.yaml
+  - reviews/deployment.yaml
+  - reviews/service.yaml
+  - reviews/hpa.yaml
+  - reviews/pdb.yaml
+  - notification/deployment.yaml
+  - notification/service.yaml
+  - notification/pdb.yaml

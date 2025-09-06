@@ -8,6 +8,8 @@ metadata:
 spec:
   replicas: 2
   revisionHistoryLimit: 5
+  # A new pod has to stay ready this long before the rollout moves on.
+  minReadySeconds: 10
   selector:
     matchLabels:
       app.kubernetes.io/name: gateway
@@ -28,6 +30,30 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      # Spread replicas over availability zones first and nodes second. Zones are a soft
+      # constraint here; the prod overlay makes them hard.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: gateway
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: gateway
       containers:
         - name: gateway
           image: ecommerce/gateway
@@ -47,6 +73,11 @@ spec:
                   name: ecommerce-secrets
                   key: jwt-signing-key
                   optional: true
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef:
+                  name: ecommerce-secrets
+                  key: redis
           resources:
             requests:
               cpu: 100m
@@ -54,6 +85,7 @@ spec:
             limits:
               cpu: 500m
               memory: 384Mi
+          # Startup covers database migrations, which retry until the database is reachable.
           startupProbe:
             httpGet:
               path: /health/live
@@ -67,6 +99,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
+          # Ready only while the service's own dependencies (database, broker, cache) answer.
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -74,6 +107,11 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 3
+          lifecycle:
+            # Keep serving while the endpoint removal reaches every proxy, then shut down.
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

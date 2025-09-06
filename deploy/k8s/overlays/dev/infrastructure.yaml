@@ -1,5 +1,5 @@
-# Single-instance, non-persistent PostgreSQL, RabbitMQ and Redis for a dev cluster such as
-# kind or minikube. Data is lost when the pods restart.
+# Single-instance, non-persistent PostgreSQL, MongoDB, RabbitMQ and Redis for a dev cluster
+# such as kind or minikube. Data is lost when the pods restart.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,6 +10,9 @@ data:
     CREATE DATABASE ordering;
     CREATE DATABASE inventory;
     CREATE DATABASE payment;
+    CREATE DATABASE identity;
+    CREATE DATABASE shipping;
+    CREATE DATABASE notification;
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -94,6 +97,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: rabbitmq
+      # Scraped by the Prometheus in deploy/k8s/observability (per-queue metrics).
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15692"
+        prometheus.io/path: /metrics/per-object
     spec:
       containers:
         - name: rabbitmq
@@ -103,6 +111,8 @@ spec:
               containerPort: 5672
             - name: management
               containerPort: 15672
+            - name: prometheus
+              containerPort: 15692
           env:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:
@@ -185,3 +195,57 @@ spec:
     - name: redis
       port: 6379
       targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  labels:
+    app.kubernetes.io/name: mongo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mongo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mongo
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7.0
+          ports:
+            - name: mongo
+              containerPort: 27017
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data/db
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+spec:
+  selector:
+    app.kubernetes.io/name: mongo
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: mongo

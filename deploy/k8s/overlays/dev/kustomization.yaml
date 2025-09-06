@@ -21,6 +21,10 @@ secretGenerator:
       - ordering-db=Host=postgres;Port=5432;Database=ordering;Username=postgres;Password=postgres
       - inventory-db=Host=postgres;Port=5432;Database=inventory;Username=postgres;Password=postgres
       - payment-db=Host=postgres;Port=5432;Database=payment;Username=postgres;Password=postgres
+      - identity-db=Host=postgres;Port=5432;Database=identity;Username=postgres;Password=postgres
+      - shipping-db=Host=postgres;Port=5432;Database=shipping;Username=postgres;Password=postgres
+      - notification-db=Host=postgres;Port=5432;Database=notification;Username=postgres;Password=postgres
+      - reviews-db=mongodb://mongo:27017
       - redis=redis:6379
       - rabbitmq-username=ecommerce
       - rabbitmq-password=ecommerce
@@ -36,6 +40,16 @@ images:
   - name: ecommerce/payment-api
     newTag: local
   - name: ecommerce/gateway
+    newTag: local
+  - name: ecommerce/identity-api
+    newTag: local
+  - name: ecommerce/basket-api
+    newTag: local
+  - name: ecommerce/shipping-api
+    newTag: local
+  - name: ecommerce/reviews-api
+    newTag: local
+  - name: ecommerce/notification-worker
     newTag: local
 
 patches:
@@ -55,15 +69,6 @@ patches:
       - op: replace
         path: /spec/maxReplicas
         value: 2
-  # With a single replica, minAvailable: 1 would block every node drain.
-  - target:
-      kind: PodDisruptionBudget
-    patch: |-
-      - op: remove
-        path: /spec/minAvailable
-      - op: add
-        path: /spec/maxUnavailable
-        value: 1
   - target:
       kind: Ingress
       name: gateway
@@ -78,6 +83,21 @@ patches:
       - op: replace
         path: /data/Jwt__EnableDevTokenEndpoint
         value: "true"
+  # One identity replica, so a signing key generated at startup is acceptable, and a known
+  # administrator account to sign in with.
+  - target:
+      kind: ConfigMap
+      name: identity-config
+    patch: |-
+      - op: replace
+        path: /data/Identity__AllowEphemeralSigningKey
+        value: "true"
+      - op: add
+        path: /data/Identity__SeedAdmin__Email
+        value: admin@ecommerce.local
+      - op: add
+        path: /data/Identity__SeedAdmin__Password
+        value: Admin-Passw0rd!
   - target:
       kind: ConfigMap
       name: ecommerce-config

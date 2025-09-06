@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: reviews-api
+spec:
+  # At most one pod of the workload down for voluntary disruptions (node drains, upgrades).
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: reviews-api

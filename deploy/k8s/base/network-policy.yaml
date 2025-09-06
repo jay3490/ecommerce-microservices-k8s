@@ -1,5 +1,6 @@
 # The services trust the X-Customer-Id header set by the gateway, so only the gateway may
-# call them (plus ordering -> catalog for pricing). Requires a CNI that enforces policies.
+# call them; the catalog also answers price lookups from ordering, basket and reviews.
+# Requires a CNI that enforces policies.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -9,7 +10,15 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [ordering-api, inventory-api, payment-api]
+        values:
+          - ordering-api
+          - inventory-api
+          - payment-api
+          - identity-api
+          - basket-api
+          - shipping-api
+          - reviews-api
+          - notification-worker
   policyTypes: [Ingress]
   ingress:
     - from:
@@ -22,7 +31,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: catalog-from-gateway-and-ordering
+  name: catalog-from-gateway-and-services
 spec:
   podSelector:
     matchLabels:
@@ -31,10 +40,9 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: gateway
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: ordering-api
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [gateway, ordering-api, basket-api, reviews-api]
       ports:
         - port: http

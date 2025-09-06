@@ -11,8 +11,6 @@ kind: ConfigMap
 metadata:
   name: gateway-config
 data:
-  # Tokens come from the identity provider; the dev token endpoint stays off.
-  Jwt__Authority: https://login.example.com/realms/ecommerce
-  Jwt__Audience: ecommerce-api
+  # Tokens come from identity-api (see base); the dev token endpoint stays off.
   Jwt__EnableDevTokenEndpoint: "false"
   RateLimiting__PermitLimit: "50"

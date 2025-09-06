@@ -1,10 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Production-shaped overlay. Hostnames, the registry and the identity provider below are
-# placeholders to replace. PostgreSQL, RabbitMQ and Redis are external, and the
-# ecommerce-secrets Secret must exist in the namespace before applying
-# (see ../../base/secret.example.yaml).
+# Production-shaped overlay for a cluster with nodes in three availability zones. Hostnames
+# and the registry below are placeholders to replace. PostgreSQL, MongoDB, RabbitMQ and Redis
+# are external, and the ecommerce-secrets Secret must exist in the namespace before applying
+# (see ../../base/secret.example.yaml), including identity-signing-key.
 
 namespace: ecommerce
 
@@ -25,6 +25,21 @@ images:
   - name: ecommerce/payment-api
     newName: registry.example.com/ecommerce/payment-api
     newTag: "1.0.0"
+  - name: ecommerce/identity-api
+    newName: registry.example.com/ecommerce/identity-api
+    newTag: "1.0.0"
+  - name: ecommerce/basket-api
+    newName: registry.example.com/ecommerce/basket-api
+    newTag: "1.0.0"
+  - name: ecommerce/shipping-api
+    newName: registry.example.com/ecommerce/shipping-api
+    newTag: "1.0.0"
+  - name: ecommerce/reviews-api
+    newName: registry.example.com/ecommerce/reviews-api
+    newTag: "1.0.0"
+  - name: ecommerce/notification-worker
+    newName: registry.example.com/ecommerce/notification-worker
+    newTag: "1.0.0"
   - name: ecommerce/gateway
     newName: registry.example.com/ecommerce/gateway
     newTag: "1.0.0"
@@ -33,17 +48,28 @@ patches:
   - path: config-patch.yaml
   - path: ingress-patch.yaml
   - path: gateway-resources-patch.yaml
-  # Spread replicas over nodes and zones so one failure does not take a service down.
+  # One replica per availability zone at least, and zone spreading becomes a hard rule:
+  # a pod that would unbalance the zones by more than one stays pending instead.
   - target:
       kind: Deployment
-    path: topology-spread-patch.yaml
+      labelSelector: app.kubernetes.io/part-of=ecommerce
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/topologySpreadConstraints/0/whenUnsatisfiable
+        value: DoNotSchedule
   - target:
       kind: HorizontalPodAutoscaler
-      name: (gateway|ordering-api)
     patch: |-
       - op: replace
         path: /spec/minReplicas
         value: 3
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: (gateway|ordering-api|catalog-api)
+    patch: |-
       - op: replace
         path: /spec/maxReplicas
-        value: 10
+        value: 12

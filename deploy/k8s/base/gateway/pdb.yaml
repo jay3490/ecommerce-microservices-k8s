@@ -3,7 +3,8 @@ kind: PodDisruptionBudget
 metadata:
   name: gateway
 spec:
-  minAvailable: 1
+  # At most one pod of the workload down for voluntary disruptions (node drains, upgrades).
+  maxUnavailable: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: gateway

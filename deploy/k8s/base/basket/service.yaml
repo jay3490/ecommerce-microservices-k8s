@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: basket-api
+  labels:
+    app.kubernetes.io/name: basket-api
+spec:
+  selector:
+    app.kubernetes.io/name: basket-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -5,7 +5,8 @@ metadata:
   name: ecommerce-config
 data:
   Observability__JsonLogs: "true"
-  # Empty disables export; point at an OpenTelemetry collector to enable it.
+  # Empty disables export; point at an OpenTelemetry collector to enable it, for example
+  # http://otel-collector.observability.svc.cluster.local:4317 (deploy/k8s/observability).
   OpenTelemetry__OtlpEndpoint: ""
   RabbitMq__Host: rabbitmq
   RabbitMq__Port: "5672"
@@ -19,18 +20,29 @@ kind: ConfigMap
 metadata:
   name: gateway-config
 data:
+  # Tokens are issued by identity-api; the gateway reads its keys from the discovery
+  # document over the cluster network.
+  Jwt__Authority: http://identity-api
+  Jwt__RequireHttpsMetadata: "false"
   Jwt__Issuer: ecommerce-gateway
   Jwt__Audience: ecommerce-api
-  Jwt__Authority: ""
   Jwt__EnableDevTokenEndpoint: "false"
   RateLimiting__PermitLimit: "100"
   RateLimiting__Window: "00:00:10"
+  Gateway__CatalogCache__Duration: "00:00:30"
+  Gateway__Limits__MaxRequestBodyBytes: "1048576"
+  Gateway__Limits__MaxResponseBodyBytes: "10485760"
   # Requests arrive through the ingress controller, which sets X-Forwarded-For.
   Gateway__TrustAllProxies: "true"
   ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog-api
   ReverseProxy__Clusters__ordering__Destinations__primary__Address: http://ordering-api
   ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory-api
   ReverseProxy__Clusters__payment__Destinations__primary__Address: http://payment-api
+  ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity-api
+  ReverseProxy__Clusters__basket__Destinations__primary__Address: http://basket-api
+  ReverseProxy__Clusters__shipping__Destinations__primary__Address: http://shipping-api
+  ReverseProxy__Clusters__reviews__Destinations__primary__Address: http://reviews-api
+  ReverseProxy__Clusters__notification__Destinations__primary__Address: http://notification-worker
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -39,3 +51,32 @@ metadata:
 data:
   PaymentSimulation__DeclineAmountsAbove: "1000"
   PaymentSimulation__DeclinedCustomerIds__0: declined-customer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: identity-config
+data:
+  # Must match the issuer the gateway finds in the discovery document at Jwt__Authority.
+  Identity__Issuer: http://identity-api
+  Identity__Audience: ecommerce-api
+  Identity__AllowEphemeralSigningKey: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shipping-config
+data:
+  ShippingRules__Carrier: Simulated Post
+  ShippingRules__MaxUnitsPerShipment: "50"
+  ShippingRules__UnserviceableCustomerIds__0: unshippable-customer
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notification-config
+data:
+  # File sink into the pod's /tmp volume; switch to Smtp and set Email__Smtp__Host to send.
+  Email__Sink: File
+  Email__PickupDirectory: /tmp/mail
+  Email__From: shop@ecommerce.local
