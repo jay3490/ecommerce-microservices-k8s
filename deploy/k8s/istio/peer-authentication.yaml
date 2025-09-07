@@ -1,0 +1,11 @@
+# Every pod in the namespace accepts only mutual-TLS traffic from other mesh workloads.
+# Kubelet probes keep working because Istio rewrites HTTP probes to go through the sidecar.
+# The services push telemetry to the collector over OTLP, so nothing outside the mesh needs
+# to reach them in plain text.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+spec:
+  mtls:
+    mode: STRICT

@@ -1,0 +1,28 @@
+# Public entry point on the Istio ingress gateway. The TLS certificate is a Secret named
+# shop-example-com-tls in the ingress gateway's namespace (istio-system by default), for
+# example issued by cert-manager. The hostname is a placeholder, as in the prod overlay.
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: ecommerce
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        - shop.example.com
+      tls:
+        mode: SIMPLE
+        credentialName: shop-example-com-tls
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - shop.example.com
+      tls:
+        httpsRedirect: true

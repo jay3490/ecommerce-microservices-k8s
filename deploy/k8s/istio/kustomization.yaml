@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# The prod overlay running inside an Istio mesh (Istio 1.22 or later, networking.istio.io/v1):
+#   - sidecar injection for the namespace and STRICT mutual TLS between all pods,
+#   - an Istio ingress Gateway and VirtualService instead of the nginx Ingress,
+#   - DestinationRules with connection pools, outlier detection and zone-aware failover.
+#
+#   kubectl kustomize deploy/k8s/istio | kubectl apply -f -
+#
+# The NetworkPolicies from base stay in place; mTLS adds workload identity and encryption on
+# top of them.
+
+resources:
+  - ../overlays/prod
+  - peer-authentication.yaml
+  - gateway.yaml
+  - virtual-services.yaml
+  - destination-rules.yaml
+
+namespace: ecommerce
+
+patches:
+  - target:
+      kind: Namespace
+      name: ecommerce
+    patch: |-
+      - op: add
+        path: /metadata/labels/istio-injection
+        value: enabled
+  # Traffic enters through the Istio ingress gateway instead.
+  - target:
+      kind: Ingress
+      name: gateway
+    patch: |-
+      $patch: delete
+      apiVersion: networking.k8s.io/v1
+      kind: Ingress
+      metadata:
+        name: gateway

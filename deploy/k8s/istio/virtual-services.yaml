@@ -1,0 +1,46 @@
+# Everything from outside goes to the YARP gateway, which does authentication, rate limiting
+# and routing to the services. Istio adds a request timeout and retries only for failures
+# where the request never reached a pod (so non-idempotent POSTs are not repeated).
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: gateway
+spec:
+  hosts:
+    - shop.example.com
+  gateways:
+    - ecommerce
+  http:
+    - name: all
+      match:
+        - uri:
+            prefix: /
+      route:
+        - destination:
+            host: gateway
+            port:
+              number: 80
+      timeout: 30s
+      retries:
+        attempts: 2
+        perTryTimeout: 10s
+        retryOn: connect-failure,refused-stream,unavailable
+---
+# Inside the mesh the callers of the catalog (ordering, basket, reviews) already retry with
+# Polly, so the mesh does not retry as well, which would multiply the attempts.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: catalog-api
+spec:
+  hosts:
+    - catalog-api
+  http:
+    - route:
+        - destination:
+            host: catalog-api
+            port:
+              number: 80
+      timeout: 10s
+      retries:
+        attempts: 0

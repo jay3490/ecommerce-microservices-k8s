@@ -1,0 +1,303 @@
+# One DestinationRule per workload: Istio mutual TLS to the pods, bounded connection pools
+# and outlier detection, which takes a replica out of the load-balancing pool for a while
+# after consecutive 5xx responses or connection failures, so one bad pod (for example in a
+# failing zone) stops receiving traffic before its readiness probe notices.
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: gateway
+spec:
+  host: gateway
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: catalog-api
+spec:
+  host: catalog-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: ordering-api
+spec:
+  host: ordering-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: inventory-api
+spec:
+  host: inventory-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: payment-api
+spec:
+  host: payment-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: identity-api
+spec:
+  host: identity-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: basket-api
+spec:
+  host: basket-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: shipping-api
+spec:
+  host: shipping-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: reviews-api
+spec:
+  host: reviews-api
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: notification-worker
+spec:
+  host: notification-worker
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+    loadBalancer:
+      simple: LEAST_REQUEST
+      # Prefer endpoints in the caller's zone and fail over to other zones when they eject.
+      localityLbSetting:
+        enabled: true
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 2s
+      http:
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 500
+        maxRequestsPerConnection: 0
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 5
+      consecutiveGatewayErrors: 3
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
