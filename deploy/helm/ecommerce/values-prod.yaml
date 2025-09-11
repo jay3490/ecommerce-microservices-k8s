@@ -1,0 +1,51 @@
+# Zonal production cluster: three replicas or more per workload with zone spreading as a hard
+# rule, images from a registry, telemetry to the collector and TLS on the ingress. Hostnames
+# and the registry are placeholders.
+#
+#   helm upgrade --install ecommerce deploy/helm/ecommerce -n ecommerce \
+#     -f deploy/helm/ecommerce/values-prod.yaml
+
+image:
+  registry: registry.example.com/
+  tag: "1.0.0"
+
+replicas: 3
+
+scheduling:
+  zoneSpread: DoNotSchedule
+
+autoscaling:
+  minReplicas: 3
+  maxReplicas: 10
+
+config:
+  RabbitMq__Host: rabbitmq.messaging.svc.cluster.local
+  OpenTelemetry__OtlpEndpoint: http://otel-collector.observability.svc.cluster.local:4317
+
+ingress:
+  host: shop.example.com
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt
+  tls:
+    - secretName: shop-example-com-tls
+      hosts:
+        - shop.example.com
+
+services:
+  gateway:
+    maxReplicas: 12
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    env:
+      RateLimiting__PermitLimit: "50"
+  ordering-api:
+    maxReplicas: 12
+  catalog-api:
+    maxReplicas: 12

@@ -1,0 +1,174 @@
+# Defaults match deploy/k8s/base. values-dev.yaml and values-prod.yaml show the two
+# environments the Kustomize overlays describe.
+
+image:
+  # Prefix including the trailing slash, for example "myregistry.azurecr.io/".
+  registry: ""
+  repository: ecommerce
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+# Secret with the connection strings and keys (see deploy/k8s/base/secret.example.yaml).
+secretName: ecommerce-secrets
+
+replicas: 2
+
+scheduling:
+  # ScheduleAnyway keeps pods schedulable on clusters without zones; use DoNotSchedule on a
+  # zonal cluster to guarantee the spread.
+  zoneSpread: ScheduleAnyway
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+podDisruptionBudget:
+  maxUnavailable: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 160Mi
+  limits:
+    cpu: 500m
+    memory: 384Mi
+
+# Environment shared by every workload (the ecommerce-config ConfigMap).
+config:
+  Observability__JsonLogs: "true"
+  OpenTelemetry__OtlpEndpoint: ""
+  RabbitMq__Host: rabbitmq
+  RabbitMq__Port: "5672"
+  Services__Catalog: http://catalog-api
+  Database__MigrateOnStartup: "true"
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ecommerce.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 1m
+  # For example: [{ secretName: shop-example-com-tls, hosts: [shop.example.com] }]
+  tls: []
+
+networkPolicies:
+  enabled: true
+
+# One entry per workload. env becomes the workload's own ConfigMap; secretEnv maps
+# environment variables to keys of the Secret; allowFrom lists the workloads that may call
+# it (omit to allow everyone, as for the gateway); autoscaling: false skips the HPA.
+services:
+  gateway:
+    component: gateway
+    env:
+      Jwt__Authority: http://identity-api
+      Jwt__RequireHttpsMetadata: "false"
+      Jwt__Issuer: ecommerce-gateway
+      Jwt__Audience: ecommerce-api
+      Jwt__EnableDevTokenEndpoint: "false"
+      RateLimiting__PermitLimit: "100"
+      RateLimiting__Window: "00:00:10"
+      Gateway__CatalogCache__Duration: "00:00:30"
+      Gateway__Limits__MaxRequestBodyBytes: "1048576"
+      Gateway__Limits__MaxResponseBodyBytes: "10485760"
+      Gateway__TrustAllProxies: "true"
+      ReverseProxy__Clusters__catalog__Destinations__primary__Address: http://catalog-api
+      ReverseProxy__Clusters__ordering__Destinations__primary__Address: http://ordering-api
+      ReverseProxy__Clusters__inventory__Destinations__primary__Address: http://inventory-api
+      ReverseProxy__Clusters__payment__Destinations__primary__Address: http://payment-api
+      ReverseProxy__Clusters__identity__Destinations__primary__Address: http://identity-api
+      ReverseProxy__Clusters__basket__Destinations__primary__Address: http://basket-api
+      ReverseProxy__Clusters__shipping__Destinations__primary__Address: http://shipping-api
+      ReverseProxy__Clusters__reviews__Destinations__primary__Address: http://reviews-api
+      ReverseProxy__Clusters__notification__Destinations__primary__Address: http://notification-worker
+    secretEnv:
+      Jwt__SigningKey: { key: jwt-signing-key, optional: true }
+      ConnectionStrings__Redis: { key: redis }
+
+  catalog-api:
+    secretEnv:
+      ConnectionStrings__CatalogDb: { key: catalog-db }
+      ConnectionStrings__Redis: { key: redis }
+    allowFrom: [gateway, ordering-api, basket-api, reviews-api]
+
+  ordering-api:
+    secretEnv:
+      ConnectionStrings__OrderingDb: { key: ordering-db }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]
+
+  inventory-api:
+    secretEnv:
+      ConnectionStrings__InventoryDb: { key: inventory-db }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]
+
+  payment-api:
+    env:
+      PaymentSimulation__DeclineAmountsAbove: "1000"
+      PaymentSimulation__DeclinedCustomerIds__0: declined-customer
+    secretEnv:
+      ConnectionStrings__PaymentDb: { key: payment-db }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]
+
+  identity-api:
+    env:
+      Identity__Issuer: http://identity-api
+      Identity__Audience: ecommerce-api
+      Identity__AllowEphemeralSigningKey: "false"
+    secretEnv:
+      ConnectionStrings__IdentityDb: { key: identity-db }
+      Identity__SigningKeyPem: { key: identity-signing-key, optional: true }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]
+
+  basket-api:
+    secretEnv:
+      ConnectionStrings__Redis: { key: redis }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]
+
+  shipping-api:
+    env:
+      ShippingRules__Carrier: Simulated Post
+      ShippingRules__MaxUnitsPerShipment: "50"
+      ShippingRules__UnserviceableCustomerIds__0: unshippable-customer
+    secretEnv:
+      ConnectionStrings__ShippingDb: { key: shipping-db }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]
+
+  reviews-api:
+    secretEnv:
+      ConnectionStrings__ReviewsDb: { key: reviews-db }
+    allowFrom: [gateway]
+
+  notification-worker:
+    component: worker
+    autoscaling: false
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    env:
+      Email__Sink: File
+      Email__PickupDirectory: /tmp/mail
+      Email__From: shop@ecommerce.local
+    secretEnv:
+      ConnectionStrings__NotificationDb: { key: notification-db }
+      RabbitMq__UserName: { key: rabbitmq-username }
+      RabbitMq__Password: { key: rabbitmq-password }
+    allowFrom: [gateway]

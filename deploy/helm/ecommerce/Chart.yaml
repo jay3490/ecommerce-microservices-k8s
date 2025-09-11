@@ -1,0 +1,14 @@
+apiVersion: v2
+name: ecommerce
+description: >-
+  The ecommerce microservices (YARP gateway, eight APIs and the notification worker) as one
+  chart with per-service values. Infrastructure (PostgreSQL, MongoDB, RabbitMQ, Redis) and the
+  ecommerce-secrets Secret are expected to exist, as with the Kustomize overlays.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - dotnet
+  - microservices
+  - yarp
+home: https://github.com/jay3490/ecommerce-microservices-k8s

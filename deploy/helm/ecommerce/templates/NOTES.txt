@@ -1,0 +1,10 @@
+Installed {{ len .Values.services }} workloads into namespace {{ .Release.Namespace }}.
+
+The pods need the {{ .Values.secretName }} Secret (see deploy/k8s/base/secret.example.yaml)
+and reachable PostgreSQL, MongoDB, RabbitMQ and Redis.
+
+  kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/part-of=ecommerce
+{{- if .Values.ingress.enabled }}
+
+The gateway is published at http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}/
+{{- end }}

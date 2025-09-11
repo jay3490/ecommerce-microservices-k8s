@@ -1,0 +1,31 @@
+{{- if .Values.networkPolicies.enabled }}
+{{- range $name, $svc := .Values.services }}
+{{- with $svc.allowFrom }}
+---
+# {{ $name }} trusts the gateway's X-Customer-Id header, so only these workloads may call it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}-ingress
+  labels:
+    {{- include "ecommerce.labels" (dict "root" $ "name" $name) | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  {{- range . }}
+                  - {{ . }}
+                  {{- end }}
+      ports:
+        - port: http
+{{- end }}
+{{- end }}
+{{- end }}

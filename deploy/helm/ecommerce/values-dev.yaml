@@ -1,0 +1,31 @@
+# Dev cluster (kind, minikube): one replica, images loaded locally, the dev token endpoint on
+# and a signing key generated at startup by the single identity replica. Infrastructure is
+# not part of the chart; the dev Kustomize overlay's infrastructure.yaml can provide it.
+#
+#   helm upgrade --install ecommerce deploy/helm/ecommerce -n ecommerce-dev --create-namespace \
+#     -f deploy/helm/ecommerce/values-dev.yaml
+
+image:
+  tag: local
+
+replicas: 1
+
+autoscaling:
+  minReplicas: 1
+  maxReplicas: 2
+
+config:
+  Observability__JsonLogs: "false"
+
+ingress:
+  host: ecommerce.dev.local
+
+services:
+  gateway:
+    env:
+      Jwt__EnableDevTokenEndpoint: "true"
+  identity-api:
+    env:
+      Identity__AllowEphemeralSigningKey: "true"
+      Identity__SeedAdmin__Email: admin@ecommerce.local
+      Identity__SeedAdmin__Password: Admin-Passw0rd!
