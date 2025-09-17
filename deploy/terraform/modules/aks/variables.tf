@@ -1,10 +1,10 @@
 variable "name" {
-  description = "Cluster name; also used to derive the names of related resources."
+  description = "Cluster name; also used as the DNS prefix."
   type        = string
 }
 
 variable "resource_group_name" {
-  description = "Existing resource group to create the resources in."
+  description = "Existing resource group to create the cluster in."
   type        = string
 }
 
@@ -30,10 +30,38 @@ variable "sku_tier" {
   }
 }
 
+variable "automatic_upgrade_channel" {
+  description = "AKS automatic upgrade channel: none, patch, stable, rapid or node-image."
+  type        = string
+  default     = "patch"
+}
+
 variable "zones" {
-  description = "Availability zones for the node pools. Empty for regions without zones."
+  description = "Availability zones. The system pool spans them and each zone gets its own application pool. Empty for regions without zones."
   type        = list(string)
   default     = ["1", "2", "3"]
+}
+
+variable "subnet_id" {
+  description = "Subnet for the node pools."
+  type        = string
+}
+
+variable "service_cidr" {
+  description = "Kubernetes service address range; must not overlap the virtual network."
+  type        = string
+  default     = "10.240.0.0/16"
+}
+
+variable "dns_service_ip" {
+  description = "Cluster DNS service address, inside service_cidr."
+  type        = string
+  default     = "10.240.0.10"
+}
+
+variable "log_analytics_workspace_id" {
+  description = "Workspace that receives Container Insights data."
+  type        = string
 }
 
 variable "system_node_vm_size" {
@@ -43,44 +71,32 @@ variable "system_node_vm_size" {
 }
 
 variable "system_node_count" {
-  description = "Number of system nodes."
+  description = "Number of system nodes, spread over the zones."
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "app_node_vm_size" {
-  description = "VM size of the autoscaled node pool that runs the application."
+  description = "VM size of the application node pools."
   type        = string
   default     = "Standard_D4s_v5"
 }
 
-variable "app_node_min_count" {
-  description = "Minimum number of application nodes."
+variable "app_node_min_count_per_zone" {
+  description = "Minimum number of application nodes in each zonal pool."
   type        = number
-  default     = 2
+  default     = 1
 }
 
-variable "app_node_max_count" {
-  description = "Maximum number of application nodes."
+variable "app_node_max_count_per_zone" {
+  description = "Maximum number of application nodes in each zonal pool."
   type        = number
-  default     = 5
+  default     = 3
 
   validation {
-    condition     = var.app_node_max_count >= 1
-    error_message = "The app_node_max_count must be at least 1."
+    condition     = var.app_node_max_count_per_zone >= 1
+    error_message = "The app_node_max_count_per_zone must be at least 1."
   }
-}
-
-variable "container_registry_name" {
-  description = "Globally unique, alphanumeric name for an Azure Container Registry the cluster can pull from. Null skips creating one."
-  type        = string
-  default     = null
-}
-
-variable "log_retention_days" {
-  description = "Retention of the Log Analytics workspace used by Container Insights."
-  type        = number
-  default     = 30
 }
 
 variable "tags" {

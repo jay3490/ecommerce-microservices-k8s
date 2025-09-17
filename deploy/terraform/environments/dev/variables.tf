@@ -4,22 +4,26 @@ variable "subscription_id" {
   default     = null
 }
 
-variable "environment" {
-  description = "Short environment name used in resource names, for example dev or prod."
-  type        = string
-  default     = "dev"
-}
-
 variable "location" {
   description = "Azure region."
   type        = string
   default     = "westeurope"
 }
 
+variable "zones" {
+  description = "Availability zones; dev uses one to keep the node count low."
+  type        = list(string)
+  default     = ["1"]
+}
+
 variable "container_registry_name" {
-  description = "Globally unique alphanumeric registry name, or null to skip the registry."
+  description = "Globally unique, alphanumeric registry name."
   type        = string
-  default     = null
+}
+
+variable "key_vault_name" {
+  description = "Globally unique Key Vault name, 3 to 24 characters."
+  type        = string
 }
 
 variable "tags" {

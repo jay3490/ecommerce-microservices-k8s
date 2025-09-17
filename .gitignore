@@ -29,4 +29,6 @@ deploy/terraform/**/*.tfstate
 deploy/terraform/**/*.tfstate.*
 deploy/terraform/**/*.tfvars
 !deploy/terraform/**/*.tfvars.example
+# The environment folders keep their non-secret settings in git.
+!deploy/terraform/environments/*/terraform.tfvars
 deploy/terraform/**/crash.log
