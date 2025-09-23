@@ -5,6 +5,37 @@
 @headset = 8f3c2a4e-1b6d-4c1a-9e57-0a1f5b2c3d04
 @dock = 8f3c2a4e-1b6d-4c1a-9e57-0a1f5b2c3d05
 
+### Register a customer with the identity service (returns access and refresh tokens)
+# @name registered
+POST {{gateway}}/api/identity/register
+Content-Type: application/json
+
+{ "email": "alice@example.com", "password": "Correct-Horse-9", "displayName": "Alice" }
+
+### Log in
+# @name login
+POST {{gateway}}/api/identity/token
+Content-Type: application/json
+
+{ "email": "alice@example.com", "password": "Correct-Horse-9" }
+
+### Exchange the refresh token for new tokens (the old refresh token stops working)
+POST {{gateway}}/api/identity/token/refresh
+Content-Type: application/json
+
+{ "refreshToken": "{{login.response.body.refreshToken}}" }
+
+### Log in as the seeded administrator (Compose and the dev overlay)
+# @name seededAdmin
+POST {{gateway}}/api/identity/token
+Content-Type: application/json
+
+{ "email": "admin@ecommerce.local", "password": "Admin-Passw0rd!" }
+
+### Who am I
+GET {{gateway}}/api/identity/me
+Authorization: Bearer {{login.response.body.accessToken}}
+
 ### Customer token (dev token endpoint)
 # @name customer
 POST {{gateway}}/auth/dev-token
@@ -19,8 +50,46 @@ Content-Type: application/json
 
 { "subject": "ops", "roles": ["admin"] }
 
-### List products (public)
+### List products (public, cached by the gateway for 30 seconds)
 GET {{gateway}}/api/products?page=1&pageSize=10
+
+### Put two keyboards in the basket
+PUT {{gateway}}/api/basket/items/{{keyboard}}
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{ "quantity": 2 }
+
+### Show the basket
+GET {{gateway}}/api/basket
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Check out: 202 with the id of the order that will be placed
+# @name checkout
+POST {{gateway}}/api/basket/checkout
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Follow the checked-out order (Pending, then Confirmed with a tracking number)
+GET {{gateway}}/api/orders/{{checkout.response.body.orderId}}
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Track its shipment
+GET {{gateway}}/api/shipments/{{checkout.response.body.orderId}}
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Dispatch it (admin), which emails the customer
+POST {{gateway}}/api/shipments/{{checkout.response.body.orderId}}/dispatch
+Authorization: Bearer {{seededAdmin.response.body.accessToken}}
+
+### Review the keyboard
+PUT {{gateway}}/api/reviews/products/{{keyboard}}
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{ "rating": 5, "title": "Great switches", "body": "Quiet enough for the office.", "authorName": "Alice" }
+
+### Rating summary (public)
+GET {{gateway}}/api/reviews/products/{{keyboard}}/summary
 
 ### Place an order that succeeds
 # @name order
@@ -65,4 +134,33 @@ Content-Type: application/json
 
 ### Payment for an order (admin)
 GET {{gateway}}/api/payments/{{order.response.body.id}}
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### Order that fails at shipping: payment is refunded, stock released, order cancelled
+# @name unshippable
+POST {{gateway}}/auth/dev-token
+Content-Type: application/json
+
+{ "subject": "unshippable-customer", "roles": ["customer"] }
+
+###
+POST {{gateway}}/api/orders
+Authorization: Bearer {{unshippable.response.body.accessToken}}
+Content-Type: application/json
+
+{ "items": [ { "productId": "{{keyboard}}", "quantity": 1 } ] }
+
+### Dead-lettered messages of the ordering service (admin)
+GET {{gateway}}/api/admin/ordering/dead-letters?limit=20
+Authorization: Bearer {{admin.response.body.accessToken}}
+
+### Replay every dead-lettered ordering message (admin)
+POST {{gateway}}/api/admin/ordering/dead-letters/replay
+Authorization: Bearer {{admin.response.body.accessToken}}
+Content-Type: application/json
+
+{ "all": true }
+
+### Outbox messages the payment service gave up publishing (admin)
+GET {{gateway}}/api/admin/payment/outbox/failed
 Authorization: Bearer {{admin.response.body.accessToken}}
